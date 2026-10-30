@@ -45,7 +45,11 @@ def project(qb: str, defense: str, receiver: str, line: float | None = None):
         df = nfl.load_player_stats(seasons=seasons, summary_level='week').to_pandas()
         required = {'player_display_name','position','recent_team','opponent_team','attempts','targets','receptions','receiving_yards','completions'}
         if not required.issubset(df.columns):
-            raise ValueError('The current nflverse data schema differs from the expected columns.')
+    missing = sorted(required - set(df.columns))
+    available = sorted(df.columns.tolist())
+    raise ValueError(
+        f"Missing columns: {missing}. Available columns: {available}"
+    )
         df = df[df['season_type'].eq('REG')] if 'season_type' in df else df
         def weighted(series):
             series = series.dropna().astype(float)
