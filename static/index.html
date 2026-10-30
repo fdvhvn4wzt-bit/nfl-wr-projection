@@ -642,10 +642,10 @@ async function runProjection() {
         // WR statistics
 
         $("share").textContent =
-            Number(data.target_share * 10).toFixed(1) + "%";
+            Number(data.target_share * 1).toFixed(1) + "%";
 
         $("catch").textContent =
-            Number(data.catch_rate * 10).toFixed(1) + "%";
+            Number(data.catch_rate * 1).toFixed(1) + "%";
 
         $("recentyards").textContent =
             data.receiver_recent_yards_average;
