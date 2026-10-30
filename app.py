@@ -2,107 +2,238 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from datetime import datetime
+from typing import Optional
 import pandas as pd
 
-app = FastAPI(title='NFL WR Receiving Yard Projection')
-BASE = Path(__file__).parent
-app.mount('/static', StaticFiles(directory=BASE / 'static'), name='static')
+app = FastAPI(title=“NFL WR Receiving Yard Projection”)
 
-@app.get('/', response_class=HTMLResponse)
+BASE = Path(file).parent
+STATIC_DIR = BASE / “static”
+
+if STATIC_DIR.exists():
+app.mount(”/static”, StaticFiles(directory=STATIC_DIR), name=“static”)
+
+def load_stats():
+import nflreadpy as nfl
+
+year = datetime.now().year
+seasons = list(range(year - 2, year + 1))
+df = nfl.load_player_stats(
+    seasons=seasons,
+    summary_level="week"
+).to_pandas()
+if df.empty:
+    raise ValueError("No NFL statistics were returned.")
+return df
+
+def weighted_average(values):
+values = pd.to_numeric(values, errors=“coerce”).dropna()
+
+if values.empty:
+    return 0.0
+season_avg = values.mean()
+last5_avg = values.tail(5).mean()
+last3_avg = values.tail(3).mean()
+return (
+    0.50 * season_avg
+    + 0.30 * last5_avg
+    + 0.20 * last3_avg
+)
+
+def player_rows(df, name, position):
+required = [“player_display_name”, “position”]
+
+for column in required:
+    if column not in df.columns:
+        raise ValueError(
+            f"NFL data is missing the required column: {column}"
+        )
+rows = df[
+    (df["player_display_name"].astype(str).str.lower() == name.lower())
+    & (df["position"].astype(str) == position)
+].copy()
+if rows.empty:
+    raise ValueError(
+        f"Could not find {name} as a {position}. "
+        "Check the spelling of the player name."
+    )
+if "season_type" in rows.columns:
+    rows = rows[rows["season_type"] == "REG"]
+if rows.empty:
+    raise ValueError("No regular-season statistics were found.")
+rows = rows.sort_values(
+    [c for c in ["season", "week"] if c in rows.columns]
+)
+latest_season = rows["season"].max() if "season" in rows else None
+if latest_season is not None:
+    rows = rows[rows["season"] == latest_season]
+return rows
+
+@app.get(”/”, response_class=HTMLResponse)
 def home():
-    return (BASE / 'static' / 'index.html').read_text()
+index_file = STATIC_DIR / “index.html”
 
-@app.get('/api/health')
+if not index_file.exists():
+    raise HTTPException(
+        status_code=500,
+        detail="The static/index.html file is missing."
+    )
+return index_file.read_text()
+
+@app.get(”/api/health”)
 def health():
-    return {'status': 'ok', 'message': 'App is running. Stats load from nflverse when available.'}
+return {
+“status”: “ok”,
+“message”: “NFL projection server is running.”
+}
 
-@app.get('/api/players')
+@app.get(”/api/players”)
 def players():
-    try:
-        import nflreadpy as nfl
-        # Try current and previous completed seasons so offseason/early-season use works.
-        from datetime import datetime
-        year = datetime.now().year
-        seasons = list(range(year - 2, year + 1))
-        data = nfl.load_player_stats(seasons=seasons, summary_level='week').to_pandas()
-        cols = [c for c in ['player_display_name', 'player_name', 'recent_team', 'position'] if c in data.columns]
-        if not cols:
-            raise ValueError('Unexpected player statistics columns returned by nflverse.')
-        wr = data[data.get('position', pd.Series(index=data.index, dtype=str)).eq('WR')] if 'position' in data else data
-        name_col = 'player_display_name' if 'player_display_name' in wr else ('player_name' if 'player_name' in wr else cols[0])
-        names = sorted(wr[name_col].dropna().astype(str).unique().tolist())
-        return {'players': names, 'teams': sorted(wr['recent_team'].dropna().astype(str).unique().tolist()) if 'recent_team' in wr else []}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f'Could not load nflverse stats right now: {e}')
+try:
+df = load_stats()
 
-@app.get('/api/project')
-def project(qb: str, defense: str, receiver: str, line: float | None = None):
-    try:
-        import nflreadpy as nfl
-        from datetime import datetime
-        year = datetime.now().year
-        seasons = list(range(year - 2, year + 1))
-        df = nfl.load_player_stats(seasons=seasons, summary_level='week').to_pandas()
-        required = {'player_display_name','position','recent_team','opponent_team','attempts','targets','receptions','receiving_yards','completions'}
+    if "player_display_name" not in df.columns:
+        raise ValueError("Player names are unavailable in the NFL data.")
+    if "position" in df.columns:
+        wr = df[df["position"] == "WR"]
+    else:
+        wr = df
+    names = sorted(
+        wr["player_display_name"]
+        .dropna()
+        .astype(str)
+        .unique()
+        .tolist()
+    )
+    teams = []
+    if "recent_team" in wr.columns:
+        teams = sorted(
+            wr["recent_team"]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+    return {
+        "players": names,
+        "teams": teams
+    }
 except Exception as e:
-        raise HTTPException(status_code=503, detail=f'Could not load nflverse stats right now: {e}')
+    raise HTTPException(status_code=503, detail=str(e))
 
-@app.get('/api/project')
-def project(qb: str, defense: str, receiver: str, line: float | None = None):
-    try:
-        import nflreadpy as nfl
-        from datetime import datetime
-        year = datetime.now().year
-        seasons = list(range(year - 2, year + 1))
-        df = nfl.load_player_stats(seasons=seasons, summary_level='week').to_pandas()
-        required = {'player_display_name','position','recent_team','opponent_team','attempts','targets','receptions','receiving_yards','completions'}
-if not required.issubset(df.columns):
-    missing = sorted(required - set(df.columns))
-    available = sorted(df.columns.tolist())
-    raise ValueError(
-        f"Missing columns: {missing}. Available columns: {available}"
+@app.get(”/api/project”)
+def project(
+qb: str,
+defense: str,
+receiver: str,
+line: Optional[float] = None
+):
+try:
+df = load_stats()
+
+    needed = [
+        "player_display_name",
+        "position",
+        "attempts",
+        "completions",
+        "targets",
+        "receptions",
+        "receiving_yards"
+    ]
+    missing = [c for c in needed if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"NFL data is missing these columns: {missing}. "
+            f"Available columns: {list(df.columns)}"
+        )
+    wr = player_rows(df, receiver, "WR")
+    qb_rows = player_rows(df, qb, "QB")
+    for column in [
+        "attempts",
+        "completions",
+        "targets",
+        "receptions",
+        "receiving_yards"
+    ]:
+        wr[column] = pd.to_numeric(
+            wr[column], errors="coerce"
+        ).fillna(0)
+    qb_rows["attempts"] = pd.to_numeric(
+        qb_rows["attempts"], errors="coerce"
+    ).fillna(0)
+    qb_rows["completions"] = pd.to_numeric(
+        qb_rows["completions"], errors="coerce"
+    ).fillna(0)
+    targets = weighted_average(wr["targets"])
+    receptions = weighted_average(wr["receptions"])
+    receiving_yards = weighted_average(wr["receiving_yards"])
+    qb_attempts = weighted_average(qb_rows["attempts"])
+    qb_completions = weighted_average(qb_rows["completions"])
+    catch_rate = (
+        receptions / targets if targets > 0 else 0
     )
-    missing = sorted(required - set(df.columns))
-    available = sorted(df.columns.tolist())
-    raise ValueError(
-    missing = sorted(required - set(df.columns))
-    available = sorted(df.columns.tolist())
-    raise ValueError(
-        f"Missing columns: {missing}. Available columns: {available}"
+    target_share = (
+        targets / qb_attempts if qb_attempts > 0 else 0
     )
-    missing = sorted(required - set(df.columns))
-    available = sorted(df.columns.tolist())
-    raise ValueError(
-        f"Missing columns: {missing}. Available columns: {available}"
+    # Find opponent passing production against the selected defense.
+    yards_per_completion = 10.5
+    if (
+        "opponent_team" in df.columns
+        and "passing_yards" in df.columns
+    ):
+        defense_rows = df[
+            (df["opponent_team"].astype(str).str.upper()
+             == defense.upper())
+            & (df["position"].astype(str) == "QB")
+        ].copy()
+        if "season_type" in defense_rows.columns:
+            defense_rows = defense_rows[
+                defense_rows["season_type"] == "REG"
+            ]
+        if not defense_rows.empty:
+            defense_rows["passing_yards"] = pd.to_numeric(
+                defense_rows["passing_yards"],
+                errors="coerce"
+            ).fillna(0)
+            defense_rows["completions"] = pd.to_numeric(
+                defense_rows["completions"],
+                errors="coerce"
+            ).fillna(0)
+            total_completions = defense_rows["completions"].sum()
+            if total_completions > 0:
+                yards_per_completion = (
+                    defense_rows["passing_yards"].sum()
+                    / total_completions
+                )
+    projected_receptions = qb_completions * target_share * catch_rate
+    projection = projected_receptions * yards_per_completion
+    result = {
+        "projection_yards": round(projection, 1),
+        "projected_receptions": round(projected_receptions, 1),
+        "target_share": round(target_share, 3),
+        "catch_rate": round(catch_rate, 3),
+        "yards_per_completion_allowed": round(
+            yards_per_completion, 2
+        ),
+        "qb_attempts_weighted": round(qb_attempts, 1),
+        "qb_completions_weighted": round(qb_completions, 1),
+        "receiver_recent_yards_average": round(
+            receiving_yards, 1
+        )
+    }
+    if line is not None:
+        edge = projection - line
+        result["line"] = line
+        result["edge"] = round(edge, 1)
+        result["lean"] = (
+            "OVER" if edge > 0
+            else "UNDER" if edge < 0
+            else "NO EDGE"
+        )
+    return result
+except Exception as e:
+    raise HTTPException(
+        status_code=400,
+        detail=str(e)
     )
-        df = df[df['season_type'].eq('REG')] if 'season_type' in df else df
-        def weighted(series):
-            series = series.dropna().astype(float)
-            if series.empty: return None
-            season = series.mean()
-            last5 = series.tail(5).mean()
-            last3 = series.tail(3).mean()
-            return .5*season + .3*last5 + .2*last3
-        wr = df[(df.player_display_name.str.lower() == receiver.lower()) & (df.position == 'WR')].sort_values(['season','week'])
-        q = df[(df.player_display_name.str.lower() == qb.lower()) & (df.position == 'QB')].sort_values(['season','week'])
-        if wr.empty or q.empty: raise ValueError('Could not find that WR or QB in the loaded stats. Check spelling and try again.')
-        # Aggregate season/recent game metrics for the selected receiver and QB.
-        wr_stats = {'targets': weighted(wr.targets), 'receptions': weighted(wr.receptions), 'yards': weighted(wr.receiving_yards)}
-        q_attempts = weighted(q.attempts)
-        q_comp = weighted(q.completions)
-        catch_rate = (wr_stats['receptions'] / wr_stats['targets']) if wr_stats['targets'] else 0
-        target_share = (wr_stats['targets'] / q_attempts) if q_attempts else 0
-        defense_rows = df[df.opponent_team.astype(str).str.upper() == defense.upper()]
-        # Defensive passing yards allowed per completion, derived from opponent passing rows.
-        opp = defense_rows.groupby(['season','week'], as_index=False).agg(yards=('passing_yards','sum'), comps=('completions','sum')) if 'passing_yards' in defense_rows else pd.DataFrame()
-        ypc_allowed = (opp.yards.sum()/opp.comps.sum()) if not opp.empty and opp.comps.sum() else 10.5
-        projected_receptions = q_comp * target_share * catch_rate
-        projection = projected_receptions * ypc_allowed
-        result = {'projection_yards': round(projection,1), 'projected_receptions': round(projected_receptions,1), 'target_share': round(target_share,3), 'catch_rate': round(catch_rate,3), 'yards_per_completion_allowed': round(ypc_allowed,2), 'qb_attempts_weighted': round(q_attempts or 0,1), 'qb_completions_weighted': round(q_comp or 0,1)}
-        if line is not None:
-            result['line'] = line
-            result['edge'] = round(projection-line,1)
-            result['lean'] = 'OVER' if projection > line else ('UNDER' if projection < line else 'NO EDGE')
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
