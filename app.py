@@ -1,41 +1,48 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+
 from pathlib import Path
 from datetime import date
-from functools import lru_cache
+import time
+
 import pandas as pd
 import nflreadpy as nfl
 
-app = FastAPI(title="NFL Receiving Yard Projection App")
+
+# ==================================================
+# APP SETUP
+# ==================================================
+
+app = FastAPI(title="NFL WR Receiving Yard Projection")
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount(
+    "/static",
+    StaticFiles(directory=STATIC_DIR),
+    name="static"
+)
 
 
-# --------------------------------------------------
+# ==================================================
 # AUTOMATIC NFL SEASON DETECTION
-# --------------------------------------------------
+# ==================================================
 
 def get_current_nfl_season():
-    """
-    NFL seasons begin in the fall and continue into January/February.
-    August is used as the transition month for the upcoming season.
-    """
 
     today = date.today()
 
     if today.month >= 8:
         return today.year
-    else:
-        return today.year - 1
+
+    return today.year - 1
 
 
-# --------------------------------------------------
+# ==================================================
 # NFL TEAMS
-# --------------------------------------------------
+# ==================================================
 
 NFL_TEAMS = {
     "ARI": "Arizona Cardinals",
@@ -69,8 +76,9 @@ NFL_TEAMS = {
     "SEA": "Seattle Seahawks",
     "TB": "Tampa Bay Buccaneers",
     "TEN": "Tennessee Titans",
-    "WAS": "Washington Commanders",
+    "WAS": "Washington Commanders"
 }
+
 
 SPORTSBOOKS = [
     "DraftKings",
@@ -78,78 +86,196 @@ SPORTSBOOKS = [
     "BetMGM",
     "Caesars",
     "ESPN BET",
-    "Other",
+    "Other"
 ]
 
 
-# --------------------------------------------------
-# LOAD CURRENT-SEASON STATISTICS ONLY
-# --------------------------------------------------
+# ==================================================
+# DATA CACHING
+# ==================================================
 
-@lru_cache(maxsize=1)
+stats_cache = {
+    "data": None,
+    "time": 0
+}
+
+roster_cache = {
+    "data": None,
+    "time": 0
+}
+
+STATS_CACHE_SECONDS = 3600
+ROSTER_CACHE_SECONDS = 43200
+
+
+# ==================================================
+# COLUMN DETECTION
+# ==================================================
+
+def find_column(df, possible_columns):
+
+    for column in possible_columns:
+
+        if column in df.columns:
+            return column
+
+    raise ValueError(
+        "Could not find required column. "
+        f"Looked for: {possible_columns}. "
+        f"Available columns: {list(df.columns)}"
+    )
+
+
+def find_name_column(df):
+
+    return find_column(
+        df,
+        [
+            "player_display_name",
+            "player_name",
+            "full_name",
+            "display_name"
+        ]
+    )
+
+
+def get_team_column(df):
+
+    return find_column(
+        df,
+        [
+            "recent_team",
+            "team",
+            "team_abbr",
+            "posteam"
+        ]
+    )
+
+
+def get_opponent_column(df):
+
+    return find_column(
+        df,
+        [
+            "opponent_team",
+            "defteam",
+            "opponent"
+        ]
+    )
+
+
+# ==================================================
+# LOAD CURRENT-SEASON PLAYER STATISTICS
+# ==================================================
+
 def load_stats():
+
+    global stats_cache
+
+    current_time = time.monotonic()
+
+    if (
+        stats_cache["data"] is not None
+        and current_time - stats_cache["time"]
+        < STATS_CACHE_SECONDS
+    ):
+        return stats_cache["data"]
 
     season = get_current_nfl_season()
 
     try:
+
         df = nfl.load_player_stats(
             seasons=[season],
             summary_level="week"
         ).to_pandas()
 
         if df.empty:
+
             raise ValueError(
-                f"No player statistics available for the {season} season yet."
+                f"No statistics available for the {season} season yet."
             )
 
-        df = df[df["season"] == season].copy()
+        df = df[
+            df["season"] == season
+        ].copy()
 
         if "season_type" in df.columns:
-            df = df[df["season_type"] == "REG"].copy()
+
+            df = df[
+                df["season_type"] == "REG"
+            ].copy()
+
+        if df.empty:
+
+            raise ValueError(
+                f"No regular-season statistics available for {season}."
+            )
+
+        stats_cache["data"] = df
+        stats_cache["time"] = current_time
 
         return df
 
     except Exception as e:
+
         raise RuntimeError(
-            f"Unable to load {season} NFL statistics: {str(e)}"
+            f"Unable to load current-season NFL statistics: {str(e)}"
         )
 
 
-# --------------------------------------------------
-# LOAD CURRENT-SEASON ROSTERS ONLY
-# --------------------------------------------------
+# ==================================================
+# LOAD CURRENT-SEASON ROSTERS
+# ==================================================
 
-@lru_cache(maxsize=1)
 def load_rosters():
+
+    global roster_cache
+
+    current_time = time.monotonic()
+
+    if (
+        roster_cache["data"] is not None
+        and current_time - roster_cache["time"]
+        < ROSTER_CACHE_SECONDS
+    ):
+        return roster_cache["data"]
 
     season = get_current_nfl_season()
 
     try:
+
         rosters = nfl.load_rosters(
             seasons=[season]
         ).to_pandas()
 
         if rosters.empty:
+
             raise ValueError(
                 f"No roster information available for {season}."
             )
 
         if "season" in rosters.columns:
+
             rosters = rosters[
                 rosters["season"] == season
             ].copy()
 
+        roster_cache["data"] = rosters
+        roster_cache["time"] = current_time
+
         return rosters
 
     except Exception as e:
+
         raise RuntimeError(
-            f"Unable to load {season} NFL rosters: {str(e)}"
+            f"Unable to load current-season rosters: {str(e)}"
         )
 
 
-# --------------------------------------------------
-# HELPER FUNCTIONS
-# --------------------------------------------------
+# ==================================================
+# WEIGHTED AVERAGE
+# ==================================================
 
 def weighted_average(values):
 
@@ -162,67 +288,77 @@ def weighted_average(values):
         return 0.0
 
     full_average = values.mean()
+
     last_five = values.tail(5).mean()
+
     last_three = values.tail(3).mean()
 
-    return float(
-        (full_average * 0.50)
-        + (last_five * 0.30)
-        + (last_three * 0.20)
+    result = (
+        full_average * 0.50
+        + last_five * 0.30
+        + last_three * 0.20
     )
 
+    return float(result)
 
-def find_name_column(df):
 
-    for column in [
-        "player_display_name",
-        "player_name",
-        "full_name"
-    ]:
-        if column in df.columns:
-            return column
+# ==================================================
+# SAFE NUMBER CONVERSION
+# ==================================================
 
-    raise ValueError("Could not find player name column.")
+def safe_number(value):
 
+    try:
+
+        if pd.isna(value):
+            return 0.0
+
+        return float(value)
+
+    except (ValueError, TypeError):
+
+        return 0.0
+
+
+# ==================================================
+# GET PLAYER STATISTICS
+# ==================================================
 
 def get_player_rows(df, player_name, team=None):
 
     name_column = find_name_column(df)
 
     rows = df[
-        df[name_column].astype(str).str.lower()
+        df[name_column]
+        .astype(str)
+        .str.lower()
         == player_name.lower()
     ].copy()
 
-    if team and "recent_team" in rows.columns:
+    if team:
+
+        team_column = get_team_column(rows)
+
         rows = rows[
-            rows["recent_team"] == team
+            rows[team_column] == team
         ].copy()
 
     if "season" in rows.columns:
+
         rows = rows[
             rows["season"] == get_current_nfl_season()
         ].copy()
 
     if "week" in rows.columns:
+
         rows = rows.sort_values("week")
 
     return rows
 
 
-def safe_number(value):
-
-    try:
-        if pd.isna(value):
-            return 0.0
-        return float(value)
-    except (ValueError, TypeError):
-        return 0.0
-
-
-# --------------------------------------------------
+# ==================================================
 # HOME PAGE
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/", response_class=HTMLResponse)
 def home():
@@ -230,17 +366,20 @@ def home():
     index_file = STATIC_DIR / "index.html"
 
     if not index_file.exists():
+
         raise HTTPException(
             status_code=404,
-            detail="index.html not found in static folder."
+            detail="static/index.html was not found."
         )
 
-    return index_file.read_text(encoding="utf-8")
+    return index_file.read_text(
+        encoding="utf-8"
+    )
 
 
-# --------------------------------------------------
+# ==================================================
 # HEALTH CHECK
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/api/health")
 def health():
@@ -252,9 +391,9 @@ def health():
     }
 
 
-# --------------------------------------------------
+# ==================================================
 # GET NFL TEAMS
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/api/teams")
 def get_teams():
@@ -264,13 +403,14 @@ def get_teams():
             "code": code,
             "name": name
         }
+
         for code, name in NFL_TEAMS.items()
     ]
 
 
-# --------------------------------------------------
+# ==================================================
 # GET SPORTSBOOKS
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/api/sportsbooks")
 def get_sportsbooks():
@@ -278,9 +418,9 @@ def get_sportsbooks():
     return SPORTSBOOKS
 
 
-# --------------------------------------------------
+# ==================================================
 # GET TEAM ROSTER
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/api/roster")
 def get_roster(team: str):
@@ -288,31 +428,30 @@ def get_roster(team: str):
     team = team.upper()
 
     if team not in NFL_TEAMS:
+
         raise HTTPException(
             status_code=400,
             detail="Invalid NFL team."
         )
 
     try:
+
         rosters = load_rosters()
 
-        team_column = (
-            "team"
-            if "team" in rosters.columns
-            else "recent_team"
-        )
+        team_column = get_team_column(rosters)
+
+        name_column = find_name_column(rosters)
 
         team_roster = rosters[
             rosters[team_column] == team
         ].copy()
 
         if team_roster.empty:
+
             raise HTTPException(
                 status_code=404,
-                detail="No roster information available for this team."
+                detail="No roster found for this team."
             )
-
-        name_column = find_name_column(team_roster)
 
         quarterbacks = []
         receivers = []
@@ -320,8 +459,14 @@ def get_roster(team: str):
         for _, player in team_roster.iterrows():
 
             name = str(player[name_column])
-            position = str(player.get("position", ""))
-            status = str(player.get("status", ""))
+
+            position = str(
+                player.get("position", "")
+            )
+
+            status = str(
+                player.get("status", "")
+            )
 
             player_info = {
                 "name": name,
@@ -330,13 +475,20 @@ def get_roster(team: str):
             }
 
             if position == "QB":
+
                 quarterbacks.append(player_info)
 
             elif position in ["WR", "TE", "RB"]:
+
                 receivers.append(player_info)
 
-        quarterbacks.sort(key=lambda x: x["name"])
-        receivers.sort(key=lambda x: x["name"])
+        quarterbacks.sort(
+            key=lambda x: x["name"]
+        )
+
+        receivers.sort(
+            key=lambda x: x["name"]
+        )
 
         return {
             "team": team,
@@ -348,15 +500,16 @@ def get_roster(team: str):
         raise
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=str(e)
         )
 
 
-# --------------------------------------------------
+# ==================================================
 # RECEIVING YARD PROJECTION
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/api/project")
 def project_receiving_yards(
@@ -369,21 +522,25 @@ def project_receiving_yards(
 ):
 
     offense_team = offense_team.upper()
+
     defense = defense.upper()
 
     if offense_team not in NFL_TEAMS:
+
         raise HTTPException(
             status_code=400,
             detail="Invalid offensive team."
         )
 
     if defense not in NFL_TEAMS:
+
         raise HTTPException(
             status_code=400,
             detail="Invalid defensive team."
         )
 
     if offense_team == defense:
+
         raise HTTPException(
             status_code=400,
             detail="Offense and defense cannot be the same team."
@@ -393,8 +550,10 @@ def project_receiving_yards(
 
         df = load_stats()
 
+        team_column = get_team_column(df)
+
         # ------------------------------------------
-        # GET QUARTERBACK STATISTICS
+        # QUARTERBACK STATISTICS
         # ------------------------------------------
 
         qb_rows = get_player_rows(
@@ -404,16 +563,17 @@ def project_receiving_yards(
         )
 
         if qb_rows.empty:
+
             raise HTTPException(
                 status_code=404,
                 detail="No current-season statistics found for this quarterback."
             )
 
-        if "attempts" not in qb_rows.columns:
-            raise ValueError("QB passing attempts are unavailable.")
+        if not {"attempts", "completions"}.issubset(qb_rows.columns):
 
-        if "completions" not in qb_rows.columns:
-            raise ValueError("QB completions are unavailable.")
+            raise ValueError(
+                "Quarterback attempts or completions are missing."
+            )
 
         qb_attempts = weighted_average(
             qb_rows["attempts"]
@@ -424,7 +584,7 @@ def project_receiving_yards(
         )
 
         # ------------------------------------------
-        # GET RECEIVER STATISTICS
+        # RECEIVER STATISTICS
         # ------------------------------------------
 
         wr_rows = get_player_rows(
@@ -434,6 +594,7 @@ def project_receiving_yards(
         )
 
         if wr_rows.empty:
+
             raise HTTPException(
                 status_code=404,
                 detail="No current-season statistics found for this receiver."
@@ -446,120 +607,148 @@ def project_receiving_yards(
         ]
 
         for column in required_columns:
+
             if column not in wr_rows.columns:
+
                 raise ValueError(
-                    f"Receiver statistics missing: {column}"
+                    f"Missing receiver statistic: {column}"
                 )
 
-        targets = weighted_average(
-            wr_rows["targets"]
-        )
+        wr_rows = wr_rows.copy()
 
-        receptions = weighted_average(
-            wr_rows["receptions"]
-        )
+        for column in required_columns:
+
+            wr_rows[column] = pd.to_numeric(
+                wr_rows[column],
+                errors="coerce"
+            ).fillna(0)
+
+        targets = wr_rows["targets"].sum()
+
+        receptions = wr_rows["receptions"].sum()
 
         receiving_yards = weighted_average(
             wr_rows["receiving_yards"]
         )
 
-        total_targets = safe_number(
-            wr_rows["targets"].sum()
-        )
-
-        total_receptions = safe_number(
-            wr_rows["receptions"].sum()
-        )
-
         # ------------------------------------------
-        # CALCULATE TRUE TEAM TARGET SHARE
+        # TRUE TEAM TARGET SHARE
         # ------------------------------------------
 
         team_rows = df[
-            df["recent_team"] == offense_team
+            df[team_column] == offense_team
         ].copy()
 
-        if "week" in team_rows.columns:
-            team_target_totals = (
-                team_rows.groupby("week")["targets"]
-                .sum()
+        if "targets" not in team_rows.columns:
+
+            raise ValueError(
+                "Team target statistics are unavailable."
             )
 
-            receiver_target_totals = (
-                wr_rows.groupby("week")["targets"]
-                .sum()
-            )
+        team_target_totals = (
+            team_rows.groupby("week")["targets"].sum()
+        )
 
-            matching_weeks = receiver_target_totals.index.intersection(
+        receiver_target_totals = (
+            wr_rows.groupby("week")["targets"].sum()
+        )
+
+        matching_weeks = (
+            receiver_target_totals.index.intersection(
                 team_target_totals.index
             )
+        )
 
-            if len(matching_weeks) > 0:
+        if len(matching_weeks) > 0:
 
-                weekly_shares = (
-                    receiver_target_totals.loc[matching_weeks]
-                    / team_target_totals.loc[matching_weeks].replace(0, pd.NA)
-                ).dropna()
+            weekly_team_targets = (
+                team_target_totals.loc[matching_weeks]
+            )
 
-                target_share = (
-                    weighted_average(weekly_shares) * 100
-                    if not weekly_shares.empty
-                    else 0.0
-                )
+            weekly_receiver_targets = (
+                receiver_target_totals.loc[matching_weeks]
+            )
 
-            else:
-                target_share = 0.0
+            weekly_shares = (
+                weekly_receiver_targets
+                / weekly_team_targets.replace(0, pd.NA)
+            ).dropna()
+
+            target_share = (
+                weighted_average(weekly_shares) * 100
+                if not weekly_shares.empty
+                else 0.0
+            )
 
         else:
+
             target_share = 0.0
 
         # ------------------------------------------
-        # CALCULATE CATCH RATE
+        # CATCH RATE
         # ------------------------------------------
 
         catch_rate = (
-            total_receptions / total_targets
-            if total_targets > 0
+            receptions / targets
+            if targets > 0
             else 0.0
         )
 
         # ------------------------------------------
-        # GET DEFENSIVE PASSING STATISTICS
+        # DEFENSIVE PASSING STATISTICS
         # ------------------------------------------
 
-        if "opponent_team" not in df.columns:
-            raise ValueError(
-                "Opponent team information is unavailable."
-            )
+        opponent_column = get_opponent_column(df)
 
         defense_rows = df[
-            df["opponent_team"] == defense
+            df[opponent_column] == defense
         ].copy()
 
+        if "position" in defense_rows.columns:
+
+            defense_rows = defense_rows[
+                defense_rows["position"] == "QB"
+            ].copy()
+
         if defense_rows.empty:
+
             raise HTTPException(
                 status_code=404,
-                detail="No current-season defensive statistics found."
+                detail="No current-season defensive statistics found for this opponent."
             )
 
-        if "passing_yards" not in defense_rows.columns:
-            raise ValueError("Passing yards data unavailable.")
+        required_defense_columns = [
+            "passing_yards",
+            "completions",
+            "week"
+        ]
 
-        if "completions" not in defense_rows.columns:
-            raise ValueError("Defensive completions data unavailable.")
+        for column in required_defense_columns:
 
-        defense_games = defense_rows.groupby("week").agg(
-            passing_yards=("passing_yards", "sum"),
-            completions=("completions", "sum")
+            if column not in defense_rows.columns:
+
+                raise ValueError(
+                    f"Missing defensive statistic: {column}"
+                )
+
+        defense_games = (
+            defense_rows.groupby("week")
+            .agg(
+                passing_yards=("passing_yards", "sum"),
+                completions=("completions", "sum")
+            )
         )
 
         defense_games = defense_games[
             defense_games["completions"] > 0
-        ]
+        ].copy()
 
         if defense_games.empty:
+
             yards_per_completion = 10.5
+
         else:
+
             defense_games["yards_per_completion"] = (
                 defense_games["passing_yards"]
                 / defense_games["completions"]
@@ -570,7 +759,7 @@ def project_receiving_yards(
             )
 
         # ------------------------------------------
-        # PROJECTION FORMULAS
+        # PROJECTION CALCULATIONS
         # ------------------------------------------
 
         target_share_decimal = target_share / 100
@@ -581,17 +770,11 @@ def project_receiving_yards(
             * catch_rate
         )
 
-        # Original formula:
-        # QB completions x target share x defensive YPC
-
         original_projection = (
             qb_completions
             * target_share_decimal
             * yards_per_completion
         )
-
-        # Improved formula:
-        # QB completions x target share x catch rate x defensive YPC
 
         improved_projection = (
             projected_receptions
@@ -603,7 +786,9 @@ def project_receiving_yards(
         # ------------------------------------------
 
         original_edge = None
+
         improved_edge = None
+
         lean = None
 
         if line is not None:
@@ -619,60 +804,76 @@ def project_receiving_yards(
             )
 
             if improved_projection > line:
+
                 lean = "OVER"
 
             elif improved_projection < line:
+
                 lean = "UNDER"
 
             else:
+
                 lean = "PASS"
 
         # ------------------------------------------
-        # RETURN PROJECTION
+        # RETURN RESULTS
         # ------------------------------------------
 
         return {
+
             "season": get_current_nfl_season(),
 
             "offense_team": offense_team,
+
             "quarterback": qb,
+
             "defense": defense,
+
             "receiver": receiver,
 
             "original_projection": round(
-                original_projection, 2
+                original_projection,
+                2
             ),
 
             "improved_projection": round(
-                improved_projection, 2
+                improved_projection,
+                2
             ),
 
             "projected_receptions": round(
-                projected_receptions, 2
+                projected_receptions,
+                2
             ),
 
             "target_share": round(
-                target_share, 2
+                target_share,
+                2
             ),
 
             "catch_rate": round(
-                catch_rate * 100, 2
+                catch_rate * 100,
+                2
             ),
 
             "yards_per_completion_allowed": round(
-                yards_per_completion, 2
+                yards_per_completion,
+                2
             ),
 
             "qb_attempts_weighted": round(
-                qb_attempts, 2
+                qb_attempts,
+                2
             ),
 
             "qb_completions_weighted": round(
-                qb_completions, 2
+                qb_completions,
+                2
             ),
 
             "receiver_recent_yards_average": round(
-                receiving_yards, 2
+                receiving_yards,
+                2
             ),
 
             "matched_games": len(wr_rows),
@@ -696,6 +897,7 @@ def project_receiving_yards(
         raise
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=str(e)
