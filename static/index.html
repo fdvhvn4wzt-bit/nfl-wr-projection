@@ -197,3 +197,1236 @@ button {
         <option value="">Loading teams...</option>
     </select>
 </div>
+<!-- ================================= -->
+<!-- RECEIVING PROPS PANEL             -->
+<!-- ================================= -->
+
+<section id="receivingPanel" class="panel">
+
+    <div class="card">
+        <h3>2. Receiving Player</h3>
+
+        <label>Quarterback</label>
+        <select id="qb" disabled>
+            <option value="">Select offense team first</option>
+        </select>
+
+        <label>Wide Receiver / Tight End</label>
+        <select id="receiver" disabled>
+            <option value="">Select offense team first</option>
+        </select>
+    </div>
+
+    <div class="card">
+        <h3>3. Receiving Sportsbook Lines</h3>
+
+        <label>Manual Sportsbook</label>
+        <select id="sportsbook">
+            <option value="">Select sportsbook</option>
+            <option>DraftKings</option>
+            <option>FanDuel</option>
+            <option>BetMGM</option>
+            <option>Caesars</option>
+            <option>ESPN BET</option>
+            <option>Other</option>
+        </select>
+
+        <label>Receiving Yards Prop Line</label>
+        <input
+            id="line"
+            type="number"
+            step="0.5"
+            min="0"
+            placeholder="Example: 67.5"
+        >
+
+        <label>Receiving Receptions Prop Line</label>
+        <input
+            id="receptionsLine"
+            type="number"
+            step="0.5"
+            min="0"
+            placeholder="Example: 5.5"
+        >
+
+        <p class="small">
+            Enter either or both lines, or leave them blank
+            to generate projections without manual sportsbook lines.
+        </p>
+
+        <button
+            id="calculate"
+            onclick="runProjection()">
+            GENERATE RECEIVING PROJECTION
+        </button>
+
+        <button
+            id="liveReceiving"
+            onclick="getLive('receiving')">
+            FETCH DRAFTKINGS + FANDUEL LINES
+        </button>
+
+        <div id="error" class="error"></div>
+        <div id="liveStatus" class="small"></div>
+    </div>
+
+    <div id="results" class="results" hidden>
+
+        <div class="card hero">
+            <div class="small">
+                IMPROVED RECEIVING YARDS PROJECTION
+            </div>
+
+            <div class="result" id="improved">—</div>
+            <div id="matchup"></div>
+        </div>
+
+        <div class="card">
+            <h3>Projection Comparison</h3>
+
+            <div class="grid">
+
+                <div class="metric">
+                    <div class="label">Original Formula</div>
+                    <div class="value" id="original">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Improved Formula</div>
+                    <div class="value" id="improved2">—</div>
+                </div>
+
+            </div>
+
+            <p class="small">
+                Original formula:
+                projected targets × defensive yards per completion.
+                <br><br>
+                Improved formula:
+                projected receptions × defensive yards per completion.
+            </p>
+
+            <h3 class="section">Quarterback Statistics</h3>
+
+            <div class="grid">
+
+                <div class="metric">
+                    <div class="label">Average Passing Attempts</div>
+                    <div class="value" id="attempts">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Average Completions</div>
+                    <div class="value" id="completions">—</div>
+                </div>
+
+            </div>
+
+            <h3 class="section">Receiver Statistics</h3>
+
+            <div class="grid">
+
+                <div class="metric">
+                    <div class="label">Target Share</div>
+                    <div class="value" id="share">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Catch Rate</div>
+                    <div class="value" id="catch">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">
+                        Recent Receiving Yards Average
+                    </div>
+                    <div class="value" id="recentyards">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Projected Receptions</div>
+                    <div class="value" id="receptions">—</div>
+                </div>
+
+            </div>
+
+            <h3 class="section">Opposing Defense</h3>
+
+            <div class="metric">
+                <div class="label">
+                    Passing Yards Allowed Per Completion
+                </div>
+                <div class="value" id="defenseyards">—</div>
+            </div>
+
+            <p class="small" id="samples"></p>
+        </div>
+
+        <!-- MANUAL RECEIVING SPORTSBOOK ANALYSIS -->
+
+        <div
+            class="card bookresult"
+            id="sportsbookResult"
+            hidden
+        >
+
+            <h3>Manual Sportsbook Analysis</h3>
+
+            <div class="grid">
+
+                <div class="metric">
+                    <div class="label">Receiving Yards Line</div>
+                    <div class="value" id="bookline">—</div>
+                    <div id="edge"></div>
+                    <div id="lean"></div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Receptions Line</div>
+                    <div class="value" id="receptionsBookLine">—</div>
+                    <div id="receptionsEdge"></div>
+                    <div id="receptionsLean"></div>
+                </div>
+
+            </div>
+
+            <p class="small">
+                A positive edge means the projection is above
+                the sportsbook line. This is not a calculated
+                probability of winning.
+            </p>
+
+        </div>
+
+        <!-- LIVE RECEIVING SPORTSBOOK ANALYSIS -->
+
+        <div class="card">
+
+            <h3>Live DraftKings + FanDuel Lines</h3>
+
+            <div
+                class="small"
+                id="receivingUpdated">
+                Not fetched yet.
+            </div>
+
+            <div
+                id="receivingLiveBooks"
+                class="grid">
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ================================= -->
+<!-- RUNNING BACK RUSHING PANEL        -->
+<!-- ================================= -->
+
+<section id="rushingPanel" class="panel" hidden>
+
+    <div class="card">
+        <h3>2. Select Running Back</h3>
+
+        <label>Running Back</label>
+        <select id="runningBack" disabled>
+            <option value="">Select offense team first</option>
+        </select>
+    </div>
+
+    <div class="card">
+        <h3>3. Rushing Sportsbook Lines</h3>
+
+        <label>Manual Sportsbook</label>
+
+        <select id="rushSportsbook">
+            <option value="">Select sportsbook</option>
+            <option>DraftKings</option>
+            <option>FanDuel</option>
+            <option>BetMGM</option>
+            <option>Caesars</option>
+            <option>ESPN BET</option>
+            <option>Other</option>
+        </select>
+
+        <label>Rushing Yards Line</label>
+        <input
+            id="rushYardsLine"
+            type="number"
+            step="0.5"
+            min="0"
+            placeholder="Example: 74.5"
+        >
+
+        <label>Rushing Attempts Line</label>
+        <input
+            id="rushAttemptsLine"
+            type="number"
+            step="0.5"
+            min="0"
+            placeholder="Example: 15.5"
+        >
+
+        <p class="small">
+            Enter either or both lines, or leave them blank
+            to generate the rushing projection.
+        </p>
+
+        <button
+            id="rushCalculate"
+            onclick="runRushingProjection()">
+            GENERATE RUSHING PROJECTION
+        </button>
+
+        <button
+            id="liveRushing"
+            onclick="getLive('rushing')">
+            FETCH DRAFTKINGS + FANDUEL LINES
+        </button>
+
+        <div id="rushError" class="error"></div>
+        <div id="rushLiveStatus" class="small"></div>
+    </div>
+
+    <div id="rushResults" class="results" hidden>
+
+        <div class="card hero">
+
+            <div class="small">
+                IMPROVED RUSHING YARDS PROJECTION
+            </div>
+
+            <div
+                class="result"
+                id="rushProjectedYards">
+                —
+            </div>
+
+            <div id="rushMatchup"></div>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Running Back Projection</h3>
+
+            <div class="grid">
+
+                <div class="metric">
+                    <div class="label">Projected Rushing Attempts</div>
+                    <div class="value" id="rushProjectedAttempts">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Improved Rushing Yards</div>
+                    <div class="value" id="rushYards">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">
+                        Original Blended Yards Projection
+                    </div>
+                    <div class="value" id="rushOriginalYards">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Player Average Attempts</div>
+                    <div class="value" id="rbAttemptsAverage">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Player Average Rushing Yards</div>
+                    <div class="value" id="rbYardsAverage">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Player Yards Per Carry</div>
+                    <div class="value" id="rbYpc">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Team Rushing Attempts Average</div>
+                    <div class="value" id="teamAttempts">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Player Carry Share</div>
+                    <div class="value" id="carryShare">—</div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">Original Blended Yards Per Carry</div>
+                    <div class="value" id="adjustedYpc">—</div>
+                </div>
+
+            </div>
+
+            <h3 class="section">Opposing Run Defense</h3>
+
+            <div class="metric">
+                <div class="label">
+                    Rushing Yards Allowed Per Attempt
+                </div>
+                <div class="value" id="defenseYpc">—</div>
+            </div>
+
+            <p class="small" id="rushSamples"></p>
+
+        </div>
+
+        <!-- MANUAL RUSHING SPORTSBOOK ANALYSIS -->
+
+        <div
+            class="card"
+            id="rushBookResults"
+            hidden
+        >
+
+            <h3>Manual Sportsbook Analysis</h3>
+
+            <div class="grid">
+
+                <div class="metric">
+                    <div class="label">
+                        Rushing Yards Line / Edge
+                    </div>
+                    <div
+                        class="value"
+                        id="rushYardsBookLine">
+                        —
+                    </div>
+                    <div id="rushYardsEdge"></div>
+                    <div id="rushYardsLean"></div>
+                </div>
+
+                <div class="metric">
+                    <div class="label">
+                        Rushing Attempts Line / Edge
+                    </div>
+                    <div
+                        class="value"
+                        id="rushAttemptsBookLine">
+                        —
+                    </div>
+                    <div id="rushAttemptsEdge"></div>
+                    <div id="rushAttemptsLean"></div>
+                </div>
+
+            </div>
+
+            <p class="small">
+                Positive edges mean the projection is above
+                the sportsbook line. These comparisons
+                are not calculated win probabilities.
+            </p>
+
+        </div>
+
+        <!-- LIVE RUSHING SPORTSBOOK ANALYSIS -->
+
+        <div class="card">
+
+            <h3>Live DraftKings + FanDuel Lines</h3>
+
+            <div
+                class="small"
+                id="rushingUpdated">
+                Not fetched yet.
+            </div>
+
+            <div
+                id="rushingLiveBooks"
+                class="grid">
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+<footer class="small">
+    NFL statistics provided through nflverse.
+    Player statistics update after games, not live.
+
+    Live sportsbook lines require an Odds API key.
+
+    Projections do not automatically account for injuries,
+    player availability, weather, or expected game script.
+
+    Model edges are not calculated win probabilities.
+</footer>
+
+<script>
+
+const $ = id => document.getElementById(id);
+
+let receivingProjection = null;
+let rushingProjection = null;
+
+function showPanel(panel) {
+    const receiving = panel === "receiving";
+
+    $("receivingPanel").hidden = !receiving;
+    $("rushingPanel").hidden = receiving;
+
+    $("receivingTab").classList.toggle("active", receiving);
+    $("rushingTab").classList.toggle("active", !receiving);
+}
+
+
+// ========================================
+// LOAD NFL TEAMS
+// ========================================
+
+async function loadTeams() {
+    try {
+        const response = await fetch("/api/teams");
+
+        if (!response.ok) {
+            throw new Error("Unable to load NFL teams.");
+        }
+
+        const teams = await response.json();
+
+        ["offense", "defense"].forEach(id => {
+            const select = $(id);
+
+            select.innerHTML =
+                '<option value="">Select team</option>';
+
+            teams.forEach(team => {
+                const option = document.createElement("option");
+
+                option.value = team.code;
+                option.textContent = team.name;
+
+                select.appendChild(option);
+            });
+        });
+
+        $("connection").textContent =
+            "NFL DATA CONNECTION READY";
+
+    } catch (error) {
+        $("connection").textContent =
+            "NFL DATA CONNECTION ERROR";
+
+        $("error").textContent = error.message;
+        $("rushError").textContent = error.message;
+    }
+}
+
+
+// ========================================
+// LOAD PLAYER ROSTERS
+// ========================================
+
+async function loadRoster() {
+    const team = $("offense").value;
+
+    ["qb", "receiver", "runningBack"].forEach(id => {
+        $(id).disabled = true;
+        $(id).innerHTML =
+            '<option value="">Loading players...</option>';
+    });
+
+    if (!team) {
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            "/api/roster?team=" + encodeURIComponent(team)
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.detail || "Unable to load roster."
+            );
+        }
+
+        function fillSelect(id, players, label) {
+            const select = $(id);
+
+            select.innerHTML =
+                `<option value="">Select ${label}</option>`;
+
+            players.forEach(player => {
+                const option = document.createElement("option");
+
+                option.value = player.name;
+                option.textContent = player.name;
+
+                select.appendChild(option);
+            });
+
+            select.disabled = false;
+        }
+
+        fillSelect(
+            "qb",
+            data.quarterbacks || [],
+            "quarterback"
+        );
+
+        fillSelect(
+            "receiver",
+            data.receivers || [],
+            "receiver"
+        );
+
+        fillSelect(
+            "runningBack",
+            data.running_backs || [],
+            "running back"
+        );
+
+    } catch (error) {
+        $("error").textContent = error.message;
+        $("rushError").textContent = error.message;
+    }
+}
+
+
+// ========================================
+// RECEIVING PROJECTION
+// ========================================
+
+async function runProjection() {
+    $("error").textContent = "";
+    $("results").hidden = true;
+
+    const offense_team = $("offense").value;
+    const qb = $("qb").value;
+    const receiver = $("receiver").value;
+    const defense = $("defense").value;
+
+    const sportsbook = $("sportsbook").value;
+
+    const yardsLine = $("line").value;
+    const receptionsLine = $("receptionsLine").value;
+
+    if (!offense_team || !qb || !receiver || !defense) {
+        $("error").textContent =
+            "Select an offense team, quarterback, receiver, and defense.";
+        return;
+    }
+
+    if (offense_team === defense) {
+        $("error").textContent =
+            "Offense and defense cannot be the same team.";
+        return;
+    }
+
+    if (
+        (yardsLine !== "" || receptionsLine !== "") &&
+        !sportsbook
+    ) {
+        $("error").textContent =
+            "Select a sportsbook for your manual lines.";
+        return;
+    }
+
+    if (
+        (yardsLine !== "" && Number(yardsLine) < 0) ||
+        (receptionsLine !== "" && Number(receptionsLine) < 0)
+    ) {
+        $("error").textContent =
+            "Sportsbook lines cannot be negative.";
+        return;
+    }
+
+    const button = $("calculate");
+
+    button.disabled = true;
+    button.textContent = "CALCULATING...";
+
+    try {
+        const params = new URLSearchParams({
+            offense_team,
+            qb,
+            receiver,
+            defense
+        });
+
+        if (yardsLine !== "") {
+            params.set("line", yardsLine);
+        }
+
+        if (receptionsLine !== "") {
+            params.set("receptions_line", receptionsLine);
+        }
+
+        if (sportsbook) {
+            params.set("sportsbook", sportsbook);
+        }
+
+        const response = await fetch(
+            "/api/project?" + params.toString()
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.detail || "Receiving projection failed."
+            );
+        }
+
+        receivingProjection = data;
+
+        $("improved").textContent =
+            data.improved_projection + " YARDS";
+
+        $("improved2").textContent =
+            data.improved_projection;
+
+        $("original").textContent =
+            data.original_projection;
+
+        $("matchup").textContent =
+            data.quarterback + " / " +
+            data.receiver + " vs. " +
+            data.opponent_name;
+
+        $("attempts").textContent =
+            data.qb_attempts_weighted;
+
+        $("completions").textContent =
+            data.qb_completions_weighted;
+
+        $("share").textContent =
+            Number(data.target_share).toFixed(1) + "%";
+
+        $("catch").textContent =
+            Number(data.catch_rate).toFixed(1) + "%";
+
+        $("recentyards").textContent =
+            data.receiver_recent_yards_average;
+
+        $("receptions").textContent =
+            data.projected_receptions;
+
+        $("defenseyards").textContent =
+            data.yards_per_completion_allowed;
+
+        $("samples").textContent =
+            "Matched games: " + data.matched_games +
+            " | Defensive games: " +
+            data.defense_games_sampled;
+
+        const hasYardsLine =
+            data.line !== null &&
+            data.line !== undefined;
+
+        const hasReceptionsLine =
+            data.receptions_line !== null &&
+            data.receptions_line !== undefined;
+
+        $("sportsbookResult").hidden =
+            !(hasYardsLine || hasReceptionsLine);
+
+        $("bookline").textContent =
+            hasYardsLine
+                ? data.line + " yards"
+                : "No line entered";
+
+        $("edge").textContent =
+            hasYardsLine
+                ? "EDGE: " +
+                  (data.improved_edge > 0 ? "+" : "") +
+                  data.improved_edge
+                : "";
+
+        $("lean").textContent =
+            hasYardsLine
+                ? "MODEL LEAN: " + data.lean
+                : "";
+
+        $("receptionsBookLine").textContent =
+            hasReceptionsLine
+                ? data.receptions_line + " receptions"
+                : "No line entered";
+
+        $("receptionsEdge").textContent =
+            hasReceptionsLine
+                ? "EDGE: " +
+                  (data.receptions_edge > 0 ? "+" : "") +
+                  data.receptions_edge
+                : "";
+
+        $("receptionsLean").textContent =
+            hasReceptionsLine
+                ? "MODEL LEAN: " + data.receptions_lean
+                : "";
+
+        $("results").hidden = false;
+
+        $("results").scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+
+    } catch (error) {
+        $("error").textContent = error.message;
+
+    } finally {
+        button.disabled = false;
+
+        button.textContent =
+            "GENERATE RECEIVING PROJECTION";
+    }
+}
+
+
+// ========================================
+// RUNNING BACK RUSHING PROJECTION
+// ========================================
+
+async function runRushingProjection() {
+    $("rushError").textContent = "";
+    $("rushResults").hidden = true;
+
+    const offense_team = $("offense").value;
+    const running_back = $("runningBack").value;
+    const defense = $("defense").value;
+
+    const sportsbook = $("rushSportsbook").value;
+
+    const yardsLine = $("rushYardsLine").value;
+    const attemptsLine = $("rushAttemptsLine").value;
+
+    if (!offense_team || !running_back || !defense) {
+        $("rushError").textContent =
+            "Select an offense team, running back, and defense.";
+        return;
+    }
+
+    if (offense_team === defense) {
+        $("rushError").textContent =
+            "Offense and defense cannot be the same team.";
+        return;
+    }
+
+    if (
+        (yardsLine !== "" || attemptsLine !== "") &&
+        !sportsbook
+    ) {
+        $("rushError").textContent =
+            "Select a sportsbook for your manual lines.";
+        return;
+    }
+
+    if (
+        (yardsLine !== "" && Number(yardsLine) < 0) ||
+        (attemptsLine !== "" && Number(attemptsLine) < 0)
+    ) {
+        $("rushError").textContent =
+            "Sportsbook lines cannot be negative.";
+        return;
+    }
+
+    const button = $("rushCalculate");
+
+    button.disabled = true;
+    button.textContent = "CALCULATING...";
+
+    try {
+        const params = new URLSearchParams({
+            offense_team,
+            running_back,
+            defense
+        });
+
+        if (yardsLine !== "") {
+            params.set("yards_line", yardsLine);
+        }
+
+        if (attemptsLine !== "") {
+            params.set("attempts_line", attemptsLine);
+        }
+
+        if (sportsbook) {
+            params.set("sportsbook", sportsbook);
+        }
+
+        const response = await fetch(
+            "/api/project/rushing?" + params.toString()
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.detail || "Rushing projection failed."
+            );
+        }
+
+        rushingProjection = data;
+
+        $("rushProjectedYards").textContent =
+            data.projected_rushing_yards + " YARDS";
+
+        $("rushMatchup").textContent =
+            data.running_back + " vs. " +
+            data.opponent_name;
+
+        $("rushProjectedAttempts").textContent =
+            data.projected_attempts;
+
+        $("rushYards").textContent =
+            data.improved_projected_rushing_yards;
+
+        $("rushOriginalYards").textContent =
+            data.original_projected_rushing_yards;
+
+        $("rbAttemptsAverage").textContent =
+            data.player_attempts_average;
+
+        $("rbYardsAverage").textContent =
+            data.player_rushing_yards_average;
+
+        $("rbYpc").textContent =
+            data.player_yards_per_carry;
+
+        $("teamAttempts").textContent =
+            data.team_attempts_average;
+
+        $("carryShare").textContent =
+            Number(data.carry_share).toFixed(1) + "%";
+
+        $("adjustedYpc").textContent =
+            data.adjusted_yards_per_carry;
+
+        $("defenseYpc").textContent =
+            data.defense_yards_per_attempt_allowed;
+
+        $("rushSamples").textContent =
+            "Player games: " +
+            data.player_games_sampled +
+            " | Defensive games: " +
+            data.defense_games_sampled;
+
+        const hasYardsLine =
+            data.yards_line !== null &&
+            data.yards_line !== undefined;
+
+        const hasAttemptsLine =
+            data.attempts_line !== null &&
+            data.attempts_line !== undefined;
+
+        $("rushBookResults").hidden =
+            !(hasYardsLine || hasAttemptsLine);
+
+        $("rushYardsBookLine").textContent =
+            hasYardsLine
+                ? data.yards_line + " yards"
+                : "No line entered";
+
+        $("rushYardsEdge").textContent =
+            hasYardsLine
+                ? "EDGE: " +
+                  (data.yards_edge > 0 ? "+" : "") +
+                  data.yards_edge
+                : "";
+
+        $("rushYardsLean").textContent =
+            hasYardsLine
+                ? "MODEL LEAN: " + data.yards_lean
+                : "";
+
+        $("rushAttemptsBookLine").textContent =
+            hasAttemptsLine
+                ? data.attempts_line + " attempts"
+                : "No line entered";
+
+        $("rushAttemptsEdge").textContent =
+            hasAttemptsLine
+                ? "EDGE: " +
+                  (data.attempts_edge > 0 ? "+" : "") +
+                  data.attempts_edge
+                : "";
+
+        $("rushAttemptsLean").textContent =
+            hasAttemptsLine
+                ? "MODEL LEAN: " + data.attempts_lean
+                : "";
+
+        $("rushResults").hidden = false;
+
+        $("rushResults").scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+
+    } catch (error) {
+        $("rushError").textContent = error.message;
+
+    } finally {
+        button.disabled = false;
+
+        button.textContent =
+            "GENERATE RUSHING PROJECTION";
+    }
+}
+
+
+// ========================================
+// LIVE DRAFTKINGS + FANDUEL PROPS
+// ========================================
+
+async function getLive(kind) {
+    const receiving = kind === "receiving";
+
+    const player = receiving
+        ? $("receiver").value
+        : $("runningBack").value;
+
+    const offense_team = $("offense").value;
+    const defense = $("defense").value;
+
+    const status = $(
+        receiving ? "liveStatus" : "rushLiveStatus"
+    );
+
+    const button = $(
+        receiving ? "liveReceiving" : "liveRushing"
+    );
+
+    if (!offense_team || !defense || !player) {
+        status.textContent =
+            "Select the matchup and player first.";
+        return;
+    }
+
+    if (offense_team === defense) {
+        status.textContent =
+            "Offense and defense must be different.";
+        return;
+    }
+
+    button.disabled = true;
+
+    status.textContent =
+        "Fetching DraftKings and FanDuel lines...";
+
+    try {
+        const params = new URLSearchParams({
+            offense_team,
+            defense,
+            player
+        });
+
+        const response = await fetch(
+            "/api/live-odds?" + params.toString()
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.detail || "Unable to load live odds."
+            );
+        }
+
+        renderLive(kind, data);
+
+        status.textContent =
+            data.message || "Sportsbook lines loaded.";
+
+    } catch (error) {
+        status.textContent = error.message;
+
+    } finally {
+        button.disabled = false;
+    }
+}
+
+
+// ========================================
+// DISPLAY LIVE SPORTSBOOK COMPARISONS
+// ========================================
+
+function renderLive(kind, data) {
+    const receiving = kind === "receiving";
+
+    const container = $(
+        receiving
+            ? "receivingLiveBooks"
+            : "rushingLiveBooks"
+    );
+
+    const updated = $(
+        receiving
+            ? "receivingUpdated"
+            : "rushingUpdated"
+    );
+
+    const projection = receiving
+        ? receivingProjection
+        : rushingProjection;
+
+    container.innerHTML = "";
+
+    updated.textContent =
+        "Fetched: " +
+        new Date(data.updated_at).toLocaleString();
+
+    const markets = receiving
+        ? [
+            {
+                key: "receiving_yards",
+                label: "Receiving Yards",
+                projection: projection?.improved_projection
+            },
+            {
+                key: "receptions",
+                label: "Receptions",
+                projection: projection?.projected_receptions
+            }
+        ]
+        : [
+            {
+                key: "rushing_yards",
+                label: "Rushing Yards",
+                projection: projection?.projected_rushing_yards
+            },
+            {
+                key: "rushing_attempts",
+                label: "Rushing Attempts",
+                projection: projection?.projected_attempts
+            }
+        ];
+
+    ["DraftKings", "FanDuel"].forEach(book => {
+        const card = document.createElement("div");
+        card.className = "metric";
+
+        const heading = document.createElement("h3");
+        heading.textContent = book;
+        card.appendChild(heading);
+
+        markets.forEach(market => {
+            const odds = data.books?.[book]?.[market.key];
+
+            const section = document.createElement("div");
+            section.style.marginBottom = "18px";
+
+            const title = document.createElement("div");
+            title.className = "label";
+            title.textContent = market.label;
+            section.appendChild(title);
+
+            const line = document.createElement("div");
+            line.className = "value";
+
+            if (!odds || odds.line === null) {
+                line.textContent = "Not posted";
+                section.appendChild(line);
+                card.appendChild(section);
+                return;
+            }
+
+            line.textContent = odds.line;
+            section.appendChild(line);
+
+            const price = document.createElement("div");
+            price.className = "small";
+            price.textContent =
+                "Posted odds: " +
+                (odds.price ?? "Unavailable");
+
+            section.appendChild(price);
+
+            if (
+                market.projection !== null &&
+                market.projection !== undefined
+            ) {
+                const edge =
+                    Number(market.projection) -
+                    Number(odds.line);
+
+                const lean =
+                    edge > 0
+                        ? "OVER"
+                        : edge < 0
+                            ? "UNDER"
+                            : "EVEN";
+
+                const comparison =
+                    document.createElement("div");
+
+                comparison.textContent =
+                    "MODEL EDGE: " +
+                    (edge > 0 ? "+" : "") +
+                    edge.toFixed(2);
+
+                section.appendChild(comparison);
+
+                const leanElement =
+                    document.createElement("div");
+
+                leanElement.textContent =
+                    "MODEL LEAN: " + lean;
+
+                leanElement.className =
+                    edge > 0
+                        ? "good"
+                        : edge < 0
+                            ? "error"
+                            : "";
+
+                section.appendChild(leanElement);
+            } else {
+                const notice = document.createElement("div");
+                notice.className = "small";
+
+                notice.textContent =
+                    "Generate a projection first to calculate the edge.";
+
+                section.appendChild(notice);
+            }
+
+            if (odds.last_update) {
+                const timestamp =
+                    document.createElement("div");
+
+                timestamp.className = "small";
+
+                timestamp.textContent =
+                    "Sportsbook updated: " +
+                    new Date(
+                        odds.last_update
+                    ).toLocaleString();
+
+                section.appendChild(timestamp);
+            }
+
+            card.appendChild(section);
+        });
+
+        container.appendChild(card);
+    });
+}
+
+
+// ========================================
+// INITIALIZE DASHBOARD
+// ========================================
+
+$("offense").addEventListener(
+    "change",
+    loadRoster
+);
+
+loadTeams();
+
+</script>
+
+</body>
+</html>
