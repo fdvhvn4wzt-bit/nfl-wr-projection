@@ -516,11 +516,12 @@ def project(
     edge = improved_projection - line if line is not None else None
 
     lean = (
-        "OVER" if edge > 0 else
-        "UNDER" if edge < 0 else
-        "NO EDGE" if edge is not None else
-        "NO LINE ENTERED"
-    )
+    "NO LINE"
+    if edge is None
+    else "OVER" if edge > 0
+    else "UNDER" if edge < 0
+    else "EVEN"
+)
 
     return {
         "offense_team": offense_team,
