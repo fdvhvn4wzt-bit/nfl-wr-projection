@@ -19,7 +19,7 @@ def load_stats():
     import nflreadpy as nfl
 
     year = datetime.now().year
-    seasons = list(range(year - 2, year + 1))
+    seasons = [year]
     df = nfl.load_player_stats(
         seasons=seasons,
         summary_level="week"
