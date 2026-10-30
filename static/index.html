@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<link rel="manifest" href="/static/manifest.json">
+<title>NFL WR Yard Projection</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#0b1220;color:#f5f7fb;font:17px -apple-system,BlinkMacSystemFont,sans-serif;padding:22px;max-width:850px;margin:auto}
+h1{font-size:29px;margin:8px 0}
+p{color:#aebbd0}
+.card{background:#172235;border:1px solid #34445d;border-radius:18px;padding:20px;margin:18px 0}
+label{display:block;margin:15px 0 6px;color:#d9e2ef}
+input{width:100%;padding:15px;border-radius:10px;border:1px solid #50617a;background:#0d1728;color:white;font-size:17px}
+button{width:100%;padding:16px;margin-top:20px;border:0;border-radius:12px;background:#3b82f6;color:white;font-size:18px;font-weight:700}
+.result{font-size:42px;font-weight:800}
+.small{font-size:14px;color:#aebbd0}
+.error{color:#ffb4b4;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>🏈 NFL WR Receiving Yard Projection</h1>
+<p>Postgame stats • Season + recent form • Optional sportsbook line</p>
+
+<div class="card">
+<label>Quarterback (full player name)</label>
+<input id="qb" placeholder="e.g. Patrick Mahomes">
+
+<label>Opposing defense (team abbreviation)</label>
+<input id="defense" placeholder="e.g. BUF">
+
+<label>Wide receiver (full player name)</label>
+<input id="receiver" placeholder="e.g. Travis Kelce">
+
+<label>Sportsbook receiving-yard line (optional)</label>
+<input id="line" type="number" step="0.5" placeholder="e.g. 68.5">
+
+<button onclick="run()">Calculate projection</button>
+<p class="small">Uses available nflverse regular-season data. Team abbreviations such as KC, BUF, SF.</p>
+</div>
+
+<div class="card" id="out" hidden>
+<div class="small">PROJECTED RECEIVING YARDS</div>
+<div class="result" id="yards">—</div>
+<div id="details"></div>
+</div>
+
+<div class="error" id="error"></div>
+
+<script>
+async function run(){
+const e=document.getElementById('error'),o=document.getElementById('out');
+e.textContent='';
+o.hidden=true;
+
+const qb=document.getElementById('qb').value.trim();
+const defense=document.getElementById('defense').value.trim();
+const receiver=document.getElementById('receiver').value.trim();
+const line=document.getElementById('line').value;
+
+if(!qb||!defense||!receiver){
+e.textContent='Please enter the quarterback, opposing defense, and wide receiver.';
+return;
+}
+
+let u='/api/project?'+new URLSearchParams({
+qb,defense,receiver,...(line?{line}: {})
+});
+
+try{
+let r=await fetch(u),d=await r.json();
+if(!r.ok)throw Error(d.detail||'Projection failed');
+
+document.getElementById('yards').textContent=d.projection_yards+' yards';
+
+document.getElementById('details').innerHTML=
+`Projected receptions: <b>${d.projected_receptions}</b><br>
+Target share: <b>${(d.target_share*100).toFixed(1)}%</b><br>
+Catch rate: <b>${(d.catch_rate*100).toFixed(1)}%</b><br>
+Opponent yards/completion: <b>${d.yards_per_completion_allowed}</b>
+${d.line!==undefined?`<br>Sportsbook line: <b>${d.line}</b><br>Model edge: <b>${d.edge>0?'+':''}${d.edge} yards (${d.lean})</b>`:''}`;
+
+o.hidden=false;
+}catch(x){
+e.textContent=x.message;
+}
+}
+</script>
+</body>
+</html>
