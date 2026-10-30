@@ -44,7 +44,27 @@ def project(qb: str, defense: str, receiver: str, line: float | None = None):
         seasons = list(range(year - 2, year + 1))
         df = nfl.load_player_stats(seasons=seasons, summary_level='week').to_pandas()
         required = {'player_display_name','position','recent_team','opponent_team','attempts','targets','receptions','receiving_yards','completions'}
+except Exception as e:
+        raise HTTPException(status_code=503, detail=f'Could not load nflverse stats right now: {e}')
+
+@app.get('/api/project')
+def project(qb: str, defense: str, receiver: str, line: float | None = None):
+    try:
+        import nflreadpy as nfl
+        from datetime import datetime
+        year = datetime.now().year
+        seasons = list(range(year - 2, year + 1))
+        df = nfl.load_player_stats(seasons=seasons, summary_level='week').to_pandas()
+        required = {'player_display_name','position','recent_team','opponent_team','attempts','targets','receptions','receiving_yards','completions'}
 if not required.issubset(df.columns):
+    missing = sorted(required - set(df.columns))
+    available = sorted(df.columns.tolist())
+    raise ValueError(
+        f"Missing columns: {missing}. Available columns: {available}"
+    )
+    missing = sorted(required - set(df.columns))
+    available = sorted(df.columns.tolist())
+    raise ValueError(
     missing = sorted(required - set(df.columns))
     available = sorted(df.columns.tolist())
     raise ValueError(
