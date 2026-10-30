@@ -193,19 +193,33 @@ button:disabled { opacity: .5; }
     </div>
 
     <div class="card">
-      <h2>Projection Comparison</h2>
+<h2>Projection Comparison</h2>
 
-      <div class="grid">
-        <div class="metric">
-          <div class="label">Original Formula</div>
-          <div class="value" id="original"></div>
-        </div>
+<div class="grid">
 
-        <div class="metric">
-          <div class="label">Improved Formula</div>
-          <div class="value" id="improved2"></div>
-        </div>
-      </div>
+  <div class="metric">
+    <div class="label"> Original Formula</div>
+    <div class="value" id="original"></div>
+
+    <p class="small">
+      Uses the player's historical statistics
+      and opposing defense to calculate
+      the receiving yards projection.
+    </p>
+  </div>
+
+  <div class="metric">
+    <div class="label"> Improved Formula</div>
+    <div class="value" id="improved2"></div>
+
+    <p class="small">
+      Gives more weight to recent performance
+      and adjusts for the opposing defense
+      to calculate the receiving yards projection.
+    </p>
+  </div>
+
+</div>
 
       <h2 class="section">Quarterback Statistics</h2>
       <div class="grid" id="qbMetrics"></div>
