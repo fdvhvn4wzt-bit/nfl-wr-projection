@@ -9,10 +9,10 @@ import pandas as pd
 app = FastAPI(title="NFL WR Receiving Yard Projection")
 
 BASE = Path(file).parent
-STATIC_DIR = BASE / “static"
+STATIC_DIR = BASE / "static"
 
 if STATIC_DIR.exists():
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name=“static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 def load_stats():
 import nflreadpy as nfl
@@ -28,7 +28,7 @@ if df.empty:
 return df
 
 def weighted_average(values):
-values = pd.to_numeric(values, errors=“coerce").dropna()
+values = pd.to_numeric(values, errors="coerce").dropna()
 
 if values.empty:
     return 0.0
@@ -42,7 +42,7 @@ return (
 )
 
 def player_rows(df, name, position):
-required = [“player_display_name", “position"]
+required = ["player_display_name", "position"]
 
 for column in required:
     if column not in df.columns:
@@ -72,7 +72,7 @@ return rows
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-index_file = STATIC_DIR / “index.html"
+index_file = STATIC_DIR / "index.html"
 
 if not index_file.exists():
     raise HTTPException(
@@ -84,8 +84,8 @@ return index_file.read_text()
 @app.get("/api/health")
 def health():
 return {
-“status": “ok",
-“message": “NFL projection server is running."
+"status": "ok",
+"message": "NFL projection server is running."
 }
 
 @app.get("/api/players")
