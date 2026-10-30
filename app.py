@@ -24,6 +24,19 @@ def numeric(df,c):return pd.to_numeric(df[c],errors='coerce').fillna(0) if c els
 def avg(values):
     v=[float(x) for x in values if pd.notna(x) and math.isfinite(float(x)) and float(x)>=0]
     return (sum(v)/len(v)*.5+sum(v[-5:])/len(v[-5:])*.3+sum(v[-3:])/len(v[-3:])*.2) if v else 0.0
+def trend(values):
+    """Automatic last-3/last-5/season baseline; handles short samples."""
+    v=[float(x) for x in values if pd.notna(x) and math.isfinite(float(x))]
+    if not v:return {'last_3':0.0,'last_5':0.0,'season':0.0,'weighted':0.0,'games':0}
+    season_mean=sum(v)/len(v)
+    last3=sum(v[-3:])/len(v[-3:])
+    last5=sum(v[-5:])/len(v[-5:])
+    return {'last_3':round(last3,2),'last_5':round(last5,2),'season':round(season_mean,2),
+            'weighted':round(.40*last3+.35*last5+.25*season_mean,2),'games':len(v)}
+def matchup_factor(defense_rate, league_rate, minimum=.80, maximum=1.20):
+    """Constrain small-sample defensive effects so projections remain stable."""
+    if league_rate<=0:return 1.0
+    return max(minimum,min(maximum,defense_rate/league_rate))
 def lean(e):return 'NO LINE' if e is None else ('OVER' if e>0 else 'UNDER' if e<0 else 'EVEN')
 def validate(offense,defense):
     offense=offense.upper().strip(); defense=defense.upper().strip()
@@ -94,9 +107,15 @@ def project(offense_team:str,qb:str,receiver:str,defense:str,sportsbook:str='Oth
         if py and pcomp:
             z['_y']=numeric(z,py);z['_c']=numeric(z,pcomp);zw=z.groupby(w).agg(y=('_y','sum'),c=('_c','sum')).reset_index();zw=zw[zw.c>0];dg=len(zw)
             if dg:dypc=avg((zw.y/zw.c).tolist())
-    targets=qa*share;receptions=targets*catch;original=targets*dypc;improved=receptions*dypc
+    targets=qa*share;usage_receptions=targets*catch;original=targets*dypc
+    receptions_trend=trend(rw.receptions.tolist());yards_trend=trend(rw.yards.tolist())
+    # A stable automatic blend: recent usage plus observed recent production.
+    receptions=.55*usage_receptions+.45*receptions_trend['weighted']
+    base_yards=.55*(receptions*dypc)+.45*yards_trend['weighted']
+    # Matchup is already represented by defensive YPC in the usage component.
+    improved=base_yards
     ye=improved-line if line is not None else None;re=receptions-receptions_line if receptions_line is not None else None
-    return {'offense_team':offense_team,'quarterback':qb,'receiver':receiver,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'improved_projection':round(improved,2),'original_projection':round(original,2),'qb_attempts_weighted':round(qa,2),'qb_completions_weighted':round(qc,2),'target_share':round(share*100,2),'catch_rate':round(catch*100,2),'receiver_recent_yards_average':round(recent,2),'projected_targets':round(targets,2),'projected_receptions':round(receptions,2),'yards_per_completion_allowed':round(dypc,2),'matched_games':len(matched),'defense_games_sampled':dg,'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','line':line,'improved_edge':round(ye,2) if ye is not None else None,'lean':lean(ye),'receptions_line':receptions_line,'receptions_edge':round(re,2) if re is not None else None,'receptions_lean':lean(re)}
+    return {'offense_team':offense_team,'quarterback':qb,'receiver':receiver,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'improved_projection':round(improved,2),'original_projection':round(original,2),'qb_attempts_weighted':round(qa,2),'qb_completions_weighted':round(qc,2),'target_share':round(share*100,2),'catch_rate':round(catch*100,2),'receiver_recent_yards_average':round(recent,2),'projected_targets':round(targets,2),'projected_receptions':round(receptions,2),'yards_per_completion_allowed':round(dypc,2),'matched_games':len(matched),'defense_games_sampled':dg,'recent_form':{'receiving_yards':yards_trend,'receptions':receptions_trend},'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','line':line,'improved_edge':round(ye,2) if ye is not None else None,'lean':lean(ye),'receptions_line':receptions_line,'receptions_edge':round(re,2) if re is not None else None,'receptions_lean':lean(re)}
 @app.get('/api/project/rushing')
 def rushing(offense_team:str,running_back:str,defense:str,sportsbook:str='Other',yards_line:float|None=None,attempts_line:float|None=None):
     offense_team,defense=validate(offense_team,defense);d=stats();w=column(d,['week']);tc=column(d,['recent_team','team','team_abbr','posteam']);oc=column(d,['opponent_team','defteam','opponent']);cc=column(d,['carries','rushing_attempts','rush_attempts']);yc=column(d,['rushing_yards','rushing_yards_gained','rush_yards'])
@@ -111,9 +130,11 @@ def rushing(offense_team:str,running_back:str,defense:str,sportsbook:str='Other'
     if oc:
         z=d[d[oc].astype(str).str.upper()==defense].copy();z['_c']=numeric(z,cc);z['_y']=numeric(z,yc);zw=z.groupby(w).agg(c=('_c','sum'),y=('_y','sum')).reset_index();zw=zw[zw.c>0];dg=len(zw)
         if dg:def_ypc=avg((zw.y/zw.c).tolist())
+    attempts_trend=trend(rw.c.tolist());yards_trend=trend(rw.y.tolist())
+    attempts=.55*attempts+.45*attempts_trend['weighted']
     blended=(player_ypc+def_ypc)/2;original=attempts*blended;improved=attempts*def_ypc
     ye=improved-yards_line if yards_line is not None else None;ae=attempts-attempts_line if attempts_line is not None else None
-    return {'offense_team':offense_team,'running_back':running_back,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'projected_attempts':round(attempts,2),'projected_rushing_yards':round(improved,2),'improved_projected_rushing_yards':round(improved,2),'original_projected_rushing_yards':round(original,2),'player_attempts_average':round(avg(rw.c.tolist()),2),'player_rushing_yards_average':round(avg(rw.y.tolist()),2),'player_yards_per_carry':round(player_ypc,2),'team_attempts_average':round(teamavg,2),'carry_share':round(share*100,2),'defense_yards_per_attempt_allowed':round(def_ypc,2),'adjusted_yards_per_carry':round(blended,2),'player_games_sampled':len(rw),'defense_games_sampled':dg,'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','yards_line':yards_line,'yards_edge':round(ye,2) if ye is not None else None,'yards_lean':lean(ye),'attempts_line':attempts_line,'attempts_edge':round(ae,2) if ae is not None else None,'attempts_lean':lean(ae)}
+    return {'offense_team':offense_team,'running_back':running_back,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'projected_attempts':round(attempts,2),'projected_rushing_yards':round(improved,2),'improved_projected_rushing_yards':round(improved,2),'original_projected_rushing_yards':round(original,2),'player_attempts_average':round(avg(rw.c.tolist()),2),'player_rushing_yards_average':round(avg(rw.y.tolist()),2),'player_yards_per_carry':round(player_ypc,2),'team_attempts_average':round(teamavg,2),'carry_share':round(share*100,2),'defense_yards_per_attempt_allowed':round(def_ypc,2),'adjusted_yards_per_carry':round(blended,2),'player_games_sampled':len(rw),'defense_games_sampled':dg,'recent_form':{'rushing_yards':yards_trend,'rushing_attempts':attempts_trend},'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','yards_line':yards_line,'yards_edge':round(ye,2) if ye is not None else None,'yards_lean':lean(ye),'attempts_line':attempts_line,'attempts_edge':round(ae,2) if ae is not None else None,'attempts_lean':lean(ae)}
 
 def odds_request(path,params):
     key=os.getenv('ODDS_API_KEY')
@@ -121,7 +142,7 @@ def odds_request(path,params):
     url='https://api.the-odds-api.com/v4/'+path+'?'+urlencode({**params,'apiKey':key})
     try:
         with urlopen(Request(url,headers={'User-Agent':'NFL-Prop-Dashboard/1.0'}),timeout=20) as response:return json.loads(response.read())
-    except Exception as exc:raise HTTPException(502,f'Odds provider error: {exc}')
+    except Exception:raise HTTPException(502,'Odds provider request failed. Check market availability and your Odds API plan.')
 @app.get('/api/live-odds')
 def live_odds(offense_team:str,defense:str,player:str):
     offense_team,defense=validate(offense_team,defense);now=datetime.now(timezone.utc);item=cache.get('events')
