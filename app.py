@@ -14,7 +14,7 @@ app = FastAPI(title='NFL Player Prop Projections')
 NAMES = '''ARI|Arizona Cardinals;ATL|Atlanta Falcons;BAL|Baltimore Ravens;BUF|Buffalo Bills;CAR|Carolina Panthers;CHI|Chicago Bears;CIN|Cincinnati Bengals;CLE|Cleveland Browns;DAL|Dallas Cowboys;DEN|Denver Broncos;DET|Detroit Lions;GB|Green Bay Packers;HOU|Houston Texans;IND|Indianapolis Colts;JAX|Jacksonville Jaguars;KC|Kansas City Chiefs;LAC|Los Angeles Chargers;LAR|Los Angeles Rams;LV|Las Vegas Raiders;MIA|Miami Dolphins;MIN|Minnesota Vikings;NE|New England Patriots;NO|New Orleans Saints;NYG|New York Giants;NYJ|New York Jets;PHI|Philadelphia Eagles;PIT|Pittsburgh Steelers;SEA|Seattle Seahawks;SF|San Francisco 49ers;TB|Tampa Bay Buccaneers;TEN|Tennessee Titans;WAS|Washington Commanders'''
 NFL_TEAMS = dict(x.split('|') for x in NAMES.split(';'))
 SPORTSBOOKS = ['DraftKings','Other']
-MARKETS = {'receiving_yards':'player_reception_yds','receptions':'player_receptions','rushing_yards':'player_rush_yds','rushing_attempts':'player_rush_attempts'}
+MARKETS = {'receiving_yards':'player_reception_yds','receptions':'player_receptions','rushing_yards':'player_rush_yds','rushing_attempts':'player_rush_attempts','passing_yards':'player_pass_yds','passing_attempts':'player_pass_attempts','passing_completions':'player_pass_completions','passing_touchdowns':'player_pass_tds','interceptions':'player_pass_interceptions'}
 cache = {}
 odds_lock = Lock()
 ODDS_CACHE_MINUTES = 360
@@ -283,6 +283,115 @@ def rushing(offense_team:str,running_back:str,defense:str,sportsbook:str='Other'
         'receptions':confidence(rb_receptions,defense_rec['games'])}
     ye=improved-yards_line if yards_line is not None else None;ae=attempts-attempts_line if attempts_line is not None else None
     return {'offense_team':offense_team,'running_back':running_back,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'projected_attempts':round(attempts,2),'projected_rushing_yards':round(improved,2),'improved_projected_rushing_yards':round(improved,2),'original_projected_rushing_yards':round(original,2),'player_attempts_average':round(avg(rw.c.tolist()),2),'player_rushing_yards_average':round(avg(rw.y.tolist()),2),'player_yards_per_carry':round(player_ypc,2),'team_attempts_average':round(teamavg,2),'carry_share':round(share*100,2),'defense_yards_per_attempt_allowed':round(def_ypc,2),'adjusted_yards_per_carry':round(blended,2),'player_games_sampled':len(rw),'defense_games_sampled':dg,'quick_factors':reasons,'usage_adjustment_pct':round((usage_factor-1)*100,1),'position_matchup_adjustment_pct':round((defense_factor-1)*50*100,1),'position_defense_yards_allowed':pos_allowed,'league_position_yards_allowed':league_allowed,'position_defense_games':pos_games,'recent_form':{'rushing_yards':yards_trend,'rushing_attempts':attempts_trend},'confidence':{'rushing_yards':confidence(rw.y.tolist(),dg),'rushing_attempts':confidence(rw.c.tolist(),dg)},'rb_projected_targets':round(projected_targets,2),'rb_receiving_yards_projection':round(projected_rb_receiving_yards,2),'rb_receptions_projection':round(projected_rb_receptions,2),'rb_receiving_yards_average':round(avg(rb_yards),2),'rb_receptions_average':round(avg(rb_receptions),2),'rb_targets_average':round(avg(rb_targets),2),'rb_catch_rate':round(player_catch*100,2),'rb_yards_per_reception':round(player_ypr,2),'rb_receiving_defense':defense_rec,'rb_receiving_reasons':rb_receiving_reasons,'rb_receiving_confidence':rb_receiving_confidence,'rb_receiving_recent_form':{'targets':target_trend,'receptions':reception_trend,'receiving_yards':receiving_yards_trend},'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','yards_line':yards_line,'yards_edge':round(ye,2) if ye is not None else None,'yards_lean':lean(ye),'attempts_line':attempts_line,'attempts_edge':round(ae,2) if ae is not None else None,'attempts_lean':lean(ae)}
+
+
+# Additional QB projections. Existing WR/TE and RB endpoints are unchanged.
+def qb_defensive_rates(df, defense, week_col, opponent_col):
+    cols = {
+        'passing_yards': column(df,['passing_yards','pass_yards']),
+        'passing_attempts': column(df,['attempts','passing_attempts']),
+        'passing_completions': column(df,['completions','passing_completions']),
+        'passing_touchdowns': column(df,['passing_tds','passing_touchdowns']),
+        'interceptions': column(df,['interceptions','passing_interceptions']),
+        'qb_rushing_yards': column(df,['rushing_yards','rush_yards']),
+        'qb_rushing_attempts': column(df,['carries','rushing_attempts','rush_attempts'])
+    }
+    pc=column(df,['position','player_position'])
+    if not all([week_col,opponent_col,pc]):
+        return {'games':0,'league_games':0,'allowed':{},'league':{}}
+    z=df[df[pc].astype(str).str.upper().str.strip()=='QB'].copy()
+    if z.empty:return {'games':0,'league_games':0,'allowed':{},'league':{}}
+    z['_opponent']=z[opponent_col].astype(str).str.upper().str.strip().replace({'LA':'LAR'})
+    z['_week']=pd.to_numeric(z[week_col],errors='coerce')
+    for k,c in cols.items():z[k]=numeric(z,c)
+    weekly=z.groupby(['_opponent','_week'],as_index=False)[list(cols)].sum()
+    selected=weekly[weekly['_opponent']==('LAR' if defense=='LA' else defense)]
+    def means(frame):return {k:round(float(frame[k].mean()),2) if not frame.empty else None for k in cols}
+    return {'games':len(selected),'league_games':len(weekly),'allowed':means(selected),'league':means(weekly)}
+
+@app.get('/api/project/qb')
+def project_qb(offense_team:str,quarterback:str,defense:str,
+               passing_yards_line:float|None=None,passing_attempts_line:float|None=None,
+               passing_completions_line:float|None=None,passing_touchdowns_line:float|None=None,
+               interceptions_line:float|None=None,rushing_yards_line:float|None=None,
+               rushing_attempts_line:float|None=None):
+    offense_team,defense=validate(offense_team,defense)
+    df=stats();wc=column(df,['week']);oc=column(df,['opponent_team','defteam','opponent'])
+    if not wc:raise HTTPException(500,'Week column missing.')
+    r=player(df,quarterback,offense_team)
+    if r.empty:raise HTTPException(404,'No current-season stats for selected quarterback.')
+    mapping={
+        'passing_yards':['passing_yards','pass_yards'],
+        'passing_attempts':['attempts','passing_attempts'],
+        'passing_completions':['completions','passing_completions'],
+        'passing_touchdowns':['passing_tds','passing_touchdowns'],
+        'interceptions':['interceptions','passing_interceptions'],
+        'rushing_yards':['rushing_yards','rush_yards'],
+        'rushing_attempts':['carries','rushing_attempts','rush_attempts']
+    }
+    missing=[k for k,v in mapping.items() if not column(r,v)]
+    if missing:raise HTTPException(503,'QB statistics unavailable for: '+', '.join(missing))
+    for k,v in mapping.items():r[k+'_model']=numeric(r,column(r,v))
+    weekly=r.groupby(wc,as_index=False)[[k+'_model' for k in mapping]].sum().sort_values(wc)
+    weekly=weekly[weekly['passing_attempts_model']>0]
+    if weekly.empty:raise HTTPException(404,'No passing games recorded for selected quarterback.')
+    defense_rates=qb_defensive_rates(df,defense,wc,oc)
+    allowed=defense_rates['allowed'];league=defense_rates['league'];dg=defense_rates['games']
+    trends={k:trend(weekly[k+'_model'].tolist()) for k in mapping}
+    def adjustment(k,limit=.12):
+        a=allowed.get(k);l=league.get(k)
+        if a is None or l is None or l<=0 or dg<2:return 1.0
+        raw=max(1-limit,min(1+limit,a/l))
+        return 1+(raw-1)*dg/(dg+5)*.65
+    def ratio(a,b,default):return a/b if b>0 else default
+    attempts_base=trends['passing_attempts']['weighted']
+    attempts=max(0,attempts_base*adjustment('passing_attempts'))
+    total_att=float(weekly['passing_attempts_model'].sum())
+    total_comp=float(weekly['passing_completions_model'].sum())
+    total_yds=float(weekly['passing_yards_model'].sum())
+    completion_rate=ratio(total_comp,total_att,.65)
+    ypa=ratio(total_yds,total_att,7.0)
+    opponent_completion_rate=ratio(allowed.get('passing_completions') or 0,allowed.get('passing_attempts') or 0,completion_rate)
+    league_completion_rate=ratio(league.get('passing_completions') or 0,league.get('passing_attempts') or 0,completion_rate)
+    completion_shift=max(-.045,min(.045,(opponent_completion_rate-league_completion_rate)*.35)) if dg>=2 else 0
+    expected_completion_rate=max(.40,min(.80,completion_rate+completion_shift))
+    completions=max(0,attempts*expected_completion_rate)
+    opponent_ypa=ratio(allowed.get('passing_yards') or 0,allowed.get('passing_attempts') or 0,ypa)
+    league_ypa=ratio(league.get('passing_yards') or 0,league.get('passing_attempts') or 0,ypa)
+    efficiency_factor=max(.90,min(1.10,1+.35*(opponent_ypa/max(league_ypa,.1)-1))) if dg>=2 else 1
+    passing_yards=max(0,.72*(attempts*ypa*efficiency_factor)+.28*trends['passing_yards']['weighted'])
+    td_rate=ratio(float(weekly['passing_touchdowns_model'].sum()),total_att,.04)
+    int_rate=ratio(float(weekly['interceptions_model'].sum()),total_att,.025)
+    # Regression toward league-average rates reduces volatility for rare outcomes.
+    league_td_rate=ratio(league.get('passing_touchdowns') or 0,league.get('passing_attempts') or 0,.045)
+    league_int_rate=ratio(league.get('interceptions') or 0,league.get('passing_attempts') or 0,.025)
+    td_rate=(td_rate*total_att+league_td_rate*70)/(total_att+70)
+    int_rate=(int_rate*total_att+league_int_rate*90)/(total_att+90)
+    touchdowns=max(0,attempts*td_rate*adjustment('passing_touchdowns',.15))
+    interceptions=max(0,attempts*int_rate*adjustment('interceptions',.15))
+    rush_attempts=max(0,trends['rushing_attempts']['weighted']*adjustment('qb_rushing_attempts'))
+    rush_ypa=ratio(float(weekly['rushing_yards_model'].sum()),float(weekly['rushing_attempts_model'].sum()),4.0)
+    rush_yards=max(0,.65*rush_attempts*rush_ypa*adjustment('qb_rushing_yards')+.35*trends['rushing_yards']['weighted'])
+    projections={'passing_yards':passing_yards,'passing_attempts':attempts,'passing_completions':completions,
+                 'passing_touchdowns':touchdowns,'interceptions':interceptions,
+                 'rushing_yards':rush_yards,'rushing_attempts':rush_attempts}
+    lines={'passing_yards':passing_yards_line,'passing_attempts':passing_attempts_line,
+           'passing_completions':passing_completions_line,'passing_touchdowns':passing_touchdowns_line,
+           'interceptions':interceptions_line,'rushing_yards':rushing_yards_line,'rushing_attempts':rushing_attempts_line}
+    for k,v in lines.items():
+        if v is not None and (not math.isfinite(v) or v<0):raise HTTPException(400,'Prop lines must be nonnegative finite numbers.')
+    edges={k:round(projections[k]-v,2) if v is not None else None for k,v in lines.items()}
+    return {'offense_team':offense_team,'quarterback':quarterback,'defense':defense,
+            'opponent_name':NFL_TEAMS[defense],'season':season(),
+            'projections':{k:round(v,2) for k,v in projections.items()},
+            'recent_form':trends,'defense_matchup':defense_rates,
+            'confidence':{k:confidence(weekly[k+'_model'].tolist(),dg) for k in mapping},
+            'lines':lines,'edges':edges,'leans':{k:lean(edges[k]) for k in mapping},
+            'player_games_sampled':len(weekly),'defense_games_sampled':dg,
+            'notes':['Passing volume drives completions and yards projections.',
+                     'Opponent QB statistics use current-season completed games.',
+                     'Touchdowns and interceptions are high-variance estimates, not probabilities.',
+                     'QB rushing includes official rushing totals, including kneel-down effects.']}
 
 def odds_request(path,params):
     key=os.getenv('ODDS_API_KEY')
