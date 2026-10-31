@@ -93,16 +93,69 @@ def books():return SPORTSBOOKS
 @app.get('/api/health')
 def health():return {'status':'ok','season':season(),'live_odds_configured':bool(os.getenv('ODDS_API_KEY'))}
 @app.get('/api/roster')
-def roster(team:str):
-    team=team.upper().strip()
-    if team not in NFL_TEAMS:raise HTTPException(400,'Invalid NFL team.')
-    d=rosters();tc=column(d,['team','team_abbr','recent_team']);nc=column(d,['player_display_name','player_name','full_name','display_name','player']);pc=column(d,['position','player_position'])
-    if not all([tc,nc,pc]):raise HTTPException(500,'Roster columns missing.')
-r=d[d[tc].astype(str).str.upper()==team].copy();sc=column(r,['status','roster_status'])
-    if sc:r=r[r[sc].astype(str).str.upper().isin(['ACT','ACTIVE','RES','PUP','IR'])]
-    r[pc]=r[pc].astype(str).str.upper()
-    def listing(positions):return sorted([{'name':str(x[nc]),'position':str(x[pc]),'status':str(x[sc]) if sc else ''} for _,x in r[r[pc].isin(positions)].iterrows()],key=lambda x:x['name'])
-    return {'team':team,'quarterbacks':listing(['QB']),'receivers':listing(['WR','TE']),'running_backs':listing(['RB'])}
+def roster(team: str):
+    team = team.upper().strip()
+
+    if team not in NFL_TEAMS:
+        raise HTTPException(400, 'Invalid NFL team.')
+
+    d = rosters()
+
+    tc = column(d, ['team', 'team_abbr', 'recent_team'])
+    nc = column(
+        d,
+        [
+            'player_display_name',
+            'player_name',
+            'full_name',
+            'display_name',
+            'player'
+        ]
+    )
+    pc = column(d, ['position', 'player_position'])
+
+    if not all([tc, nc, pc]):
+        raise HTTPException(500, 'Roster columns missing.')
+
+    # The Rams may appear as LA or LAR in NFL data.
+    if team == 'LAR':
+        valid_codes = ['LAR', 'LA']
+    else:
+        valid_codes = [team]
+
+    r = d[
+        d[tc].astype(str).str.upper().str.strip().isin(valid_codes)
+    ].copy()
+
+    sc = column(r, ['status', 'roster_status'])
+
+    if sc:
+        r = r[
+            r[sc].astype(str).str.upper().isin(
+                ['ACT', 'ACTIVE', 'RES', 'PUP', 'IR']
+            )
+        ]
+
+    r[pc] = r[pc].astype(str).str.upper()
+
+    def listing(positions):
+        players = []
+
+        for _, x in r[r[pc].isin(positions)].iterrows():
+            players.append({
+                'name': str(x[nc]),
+                'position': str(x[pc]),
+                'status': str(x[sc]) if sc else ''
+            })
+
+        return sorted(players, key=lambda x: x['name'])
+
+    return {
+        'team': team,
+        'quarterbacks': listing(['QB']),
+        'receivers': listing(['WR', 'TE']),
+        'running_backs': listing(['RB'])
+    }
 @app.get('/api/project')
 def project(offense_team:str,qb:str,receiver:str,defense:str,sportsbook:str='Other',line:float|None=None,receptions_line:float|None=None):
     offense_team,defense=validate(offense_team,defense);d=stats();w=column(d,['week']);oc=column(d,['opponent_team','defteam','opponent'])
