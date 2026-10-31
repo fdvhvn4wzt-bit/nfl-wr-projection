@@ -85,6 +85,29 @@ def position_defense(df, opponent, position, metric, week_col, opponent_col):
     factor=1.0+(raw-1.0)*.60*games/(games+4)
     return factor,games,round(allowed,2),round(league,2)
 
+def rb_receiving_defense(df, opponent, week_col, opponent_col):
+    """Per-game RB targets, catches and receiving yards allowed; zeros included."""
+    pc=column(df,['position','player_position'])
+    tc=column(df,['targets']); rc=column(df,['receptions'])
+    yc=column(df,['receiving_yards','rec_yards'])
+    if not all([pc,tc,rc,yc,week_col,opponent_col]):
+        return {'games':0,'targets':None,'receptions':None,'yards':None,'league_receptions':None,'league_yards':None}
+    z=df.copy()
+    z['_opp']=z[opponent_col].astype(str).str.upper().str.strip().replace({'LA':'LAR'})
+    z['_week']=pd.to_numeric(z[week_col],errors='coerce')
+    # All opponent/game combinations, including games where RBs recorded zero.
+    games=z[['_opp','_week']].dropna().drop_duplicates()
+    rb=z[z[pc].astype(str).str.upper().str.strip()=='RB'].copy()
+    rb['_t']=numeric(rb,tc);rb['_r']=numeric(rb,rc);rb['_y']=numeric(rb,yc)
+    totals=rb.groupby(['_opp','_week'],as_index=False).agg(targets=('_t','sum'),receptions=('_r','sum'),yards=('_y','sum'))
+    all_games=games.merge(totals,on=['_opp','_week'],how='left').fillna({'targets':0,'receptions':0,'yards':0})
+    selected=all_games[all_games['_opp']==('LAR' if opponent=='LA' else opponent)]
+    def rounded_mean(frame,col):return round(float(frame[col].mean()),2) if not frame.empty else None
+    return {'games':len(selected),'targets':rounded_mean(selected,'targets'),
+            'receptions':rounded_mean(selected,'receptions'),'yards':rounded_mean(selected,'yards'),
+            'league_receptions':rounded_mean(all_games,'receptions'),
+            'league_yards':rounded_mean(all_games,'yards')}
+
 def usage_adjustment(values):
     """Recent opportunities vs season average, with a conservative cap."""
     v=[float(x) for x in values if pd.notna(x) and math.isfinite(float(x))]
@@ -189,7 +212,7 @@ def project(offense_team:str,qb:str,receiver:str,defense:str,sportsbook:str='Oth
     ye=improved-line if line is not None else None;re=receptions-receptions_line if receptions_line is not None else None
     return {'offense_team':offense_team,'quarterback':qb,'receiver':receiver,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'improved_projection':round(improved,2),'original_projection':round(original,2),'qb_attempts_weighted':round(qa,2),'qb_completions_weighted':round(qc,2),'target_share':round(share*100,2),'catch_rate':round(catch*100,2),'receiver_recent_yards_average':round(recent,2),'projected_targets':round(targets,2),'projected_receptions':round(receptions,2),'yards_per_completion_allowed':round(dypc,2),'matched_games':len(matched),'defense_games_sampled':dg,'quick_factors':reasons,'usage_adjustment_pct':round((usage_factor-1)*100,1),'position_matchup_adjustment_pct':round((defense_factor-1)*50*100,1),'position_defense_yards_allowed':pos_allowed,'league_position_yards_allowed':league_allowed,'position_defense_games':pos_games,'recent_form':{'receiving_yards':yards_trend,'receptions':receptions_trend},'confidence':{'receiving_yards':confidence(rw.yards.tolist(),dg),'receptions':confidence(rw.receptions.tolist(),dg)},'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','line':line,'improved_edge':round(ye,2) if ye is not None else None,'lean':lean(ye),'receptions_line':receptions_line,'receptions_edge':round(re,2) if re is not None else None,'receptions_lean':lean(re)}
 @app.get('/api/project/rushing')
-def rushing(offense_team:str,running_back:str,defense:str,sportsbook:str='Other',yards_line:float|None=None,attempts_line:float|None=None):
+def rushing(offense_team:str,running_back:str,defense:str,sportsbook:str='Other',yards_line:float|None=None,attempts_line:float|None=None,receiving_yards_line:float|None=None,receptions_line:float|None=None):
     offense_team,defense=validate(offense_team,defense);d=stats();w=column(d,['week']);tc=column(d,['recent_team','team','team_abbr','posteam']);oc=column(d,['opponent_team','defteam','opponent']);cc=column(d,['carries','rushing_attempts','rush_attempts']);yc=column(d,['rushing_yards','rushing_yards_gained','rush_yards'])
     if not all([w,tc,cc,yc]):raise HTTPException(500,'Rushing data columns missing.')
     r=player(d,running_back,offense_team)
@@ -213,8 +236,53 @@ def rushing(offense_team:str,running_back:str,defense:str,sportsbook:str='Other'
     reasons=[usage_note]
     if pos_games:reasons.append(('Favorable' if defense_factor>1.015 else 'Tough' if defense_factor<.985 else 'Neutral')+' matchup vs RB')
     else:reasons.append('Position matchup data limited')
+    # RB receiving props use ALL player weeks, including games with zero catches.
+    target_col=column(r,['targets']); reception_col=column(r,['receptions'])
+    receiving_col=column(r,['receiving_yards','rec_yards'])
+    if not all([target_col,reception_col,receiving_col]):
+        raise HTTPException(500,'RB receiving stat columns missing.')
+    receiving_weekly=r.copy()
+    receiving_weekly['_rt']=numeric(receiving_weekly,target_col)
+    receiving_weekly['_rr']=numeric(receiving_weekly,reception_col)
+    receiving_weekly['_ry']=numeric(receiving_weekly,receiving_col)
+    receiving_weekly=receiving_weekly.groupby(w).agg(targets=('_rt','sum'),receptions=('_rr','sum'),yards=('_ry','sum')).reset_index()
+    receiving_weekly=receiving_weekly.sort_values(w)
+    defense_rec=rb_receiving_defense(d,defense,w,oc)
+    rb_targets=receiving_weekly.targets.tolist()
+    rb_receptions=receiving_weekly.receptions.tolist()
+    rb_yards=receiving_weekly.yards.tolist()
+    target_trend=trend(rb_targets)
+    reception_trend=trend(rb_receptions)
+    receiving_yards_trend=trend(rb_yards)
+    target_factor,target_note=usage_adjustment(rb_targets)
+    projected_targets=max(0,target_trend['weighted']*target_factor)
+    player_catch=sum(rb_receptions)/sum(rb_targets) if sum(rb_targets)>0 else 0
+    # The player's catch rate is blended with the defense's RB catch rate.
+    defense_catch=(defense_rec['receptions']/defense_rec['targets']
+                   if defense_rec['targets'] and defense_rec['receptions'] is not None else None)
+    expected_catch=(.8*player_catch+.2*defense_catch) if defense_catch is not None else player_catch
+    expected_catch=max(0,min(1,expected_catch))
+    base_receptions=.6*(projected_targets*expected_catch)+.4*reception_trend['weighted']
+    def rec_matchup(metric,league):
+        if metric is None or league is None or league<=0:return 1.0
+        raw=matchup_factor(metric,league,.8,1.2)
+        return 1+(.35*(raw-1)*defense_rec['games']/(defense_rec['games']+4))
+    reception_factor=rec_matchup(defense_rec['receptions'],defense_rec['league_receptions'])
+    projected_rb_receptions=max(0,base_receptions*reception_factor)
+    player_ypr=sum(rb_yards)/sum(rb_receptions) if sum(rb_receptions)>0 else 0
+    defense_ypr=(defense_rec['yards']/defense_rec['receptions']
+                 if defense_rec['receptions'] and defense_rec['yards'] is not None else None)
+    expected_ypr=(.8*player_ypr+.2*defense_ypr) if defense_ypr is not None else player_ypr
+    # No second matchup multiplier on receiving yards: defensive efficiency
+    # has already entered expected yards/reception and projected catches.
+    projected_rb_receiving_yards=max(0,.6*(projected_rb_receptions*expected_ypr)+.4*receiving_yards_trend['weighted'])
+    rb_receiving_reasons=[target_note,
+        'Opponent RB receptions allowed: '+str(defense_rec['receptions'])+' per game' if defense_rec['receptions'] is not None else 'RB receiving defense data limited']
+    rb_receiving_confidence={
+        'receiving_yards':confidence(rb_yards,defense_rec['games']),
+        'receptions':confidence(rb_receptions,defense_rec['games'])}
     ye=improved-yards_line if yards_line is not None else None;ae=attempts-attempts_line if attempts_line is not None else None
-    return {'offense_team':offense_team,'running_back':running_back,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'projected_attempts':round(attempts,2),'projected_rushing_yards':round(improved,2),'improved_projected_rushing_yards':round(improved,2),'original_projected_rushing_yards':round(original,2),'player_attempts_average':round(avg(rw.c.tolist()),2),'player_rushing_yards_average':round(avg(rw.y.tolist()),2),'player_yards_per_carry':round(player_ypc,2),'team_attempts_average':round(teamavg,2),'carry_share':round(share*100,2),'defense_yards_per_attempt_allowed':round(def_ypc,2),'adjusted_yards_per_carry':round(blended,2),'player_games_sampled':len(rw),'defense_games_sampled':dg,'quick_factors':reasons,'usage_adjustment_pct':round((usage_factor-1)*100,1),'position_matchup_adjustment_pct':round((defense_factor-1)*50*100,1),'position_defense_yards_allowed':pos_allowed,'league_position_yards_allowed':league_allowed,'position_defense_games':pos_games,'recent_form':{'rushing_yards':yards_trend,'rushing_attempts':attempts_trend},'confidence':{'rushing_yards':confidence(rw.y.tolist(),dg),'rushing_attempts':confidence(rw.c.tolist(),dg)},'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','yards_line':yards_line,'yards_edge':round(ye,2) if ye is not None else None,'yards_lean':lean(ye),'attempts_line':attempts_line,'attempts_edge':round(ae,2) if ae is not None else None,'attempts_lean':lean(ae)}
+    return {'offense_team':offense_team,'running_back':running_back,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'projected_attempts':round(attempts,2),'projected_rushing_yards':round(improved,2),'improved_projected_rushing_yards':round(improved,2),'original_projected_rushing_yards':round(original,2),'player_attempts_average':round(avg(rw.c.tolist()),2),'player_rushing_yards_average':round(avg(rw.y.tolist()),2),'player_yards_per_carry':round(player_ypc,2),'team_attempts_average':round(teamavg,2),'carry_share':round(share*100,2),'defense_yards_per_attempt_allowed':round(def_ypc,2),'adjusted_yards_per_carry':round(blended,2),'player_games_sampled':len(rw),'defense_games_sampled':dg,'quick_factors':reasons,'usage_adjustment_pct':round((usage_factor-1)*100,1),'position_matchup_adjustment_pct':round((defense_factor-1)*50*100,1),'position_defense_yards_allowed':pos_allowed,'league_position_yards_allowed':league_allowed,'position_defense_games':pos_games,'recent_form':{'rushing_yards':yards_trend,'rushing_attempts':attempts_trend},'confidence':{'rushing_yards':confidence(rw.y.tolist(),dg),'rushing_attempts':confidence(rw.c.tolist(),dg)},'rb_projected_targets':round(projected_targets,2),'rb_receiving_yards_projection':round(projected_rb_receiving_yards,2),'rb_receptions_projection':round(projected_rb_receptions,2),'rb_receiving_yards_average':round(avg(rb_yards),2),'rb_receptions_average':round(avg(rb_receptions),2),'rb_targets_average':round(avg(rb_targets),2),'rb_catch_rate':round(player_catch*100,2),'rb_yards_per_reception':round(player_ypr,2),'rb_receiving_defense':defense_rec,'rb_receiving_reasons':rb_receiving_reasons,'rb_receiving_confidence':rb_receiving_confidence,'rb_receiving_recent_form':{'targets':target_trend,'receptions':reception_trend,'receiving_yards':receiving_yards_trend},'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','yards_line':yards_line,'yards_edge':round(ye,2) if ye is not None else None,'yards_lean':lean(ye),'attempts_line':attempts_line,'attempts_edge':round(ae,2) if ae is not None else None,'attempts_lean':lean(ae)}
 
 def odds_request(path,params):
     key=os.getenv('ODDS_API_KEY')
