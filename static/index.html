@@ -4,944 +4,535 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>NFL Player Prop Dashboard</title>
-
 <style>
-:root {
-  color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-}
-* { box-sizing: border-box; }
-body {
-  background: #0b1220;
-  color: #f5f7fb;
-  max-width: 880px;
-  margin: auto;
-  padding: 18px;
-}
-p, .small { color: #afbdd1; line-height: 1.5; }
-.card {
-  background: #172235;
-  border: 1px solid #34445d;
-  border-radius: 16px;
-  padding: 18px;
-  margin: 16px 0;
-}
-h1 { font-size: 28px; }
-h2 { font-size: 20px; }
-label {
-  display: block;
-  margin: 14px 0 6px;
-  color: #d9e2ef;
-}
-select, input {
-  width: 100%;
-  padding: 14px;
-  background: #0d1728;
-  border: 1px solid #50617a;
-  border-radius: 10px;
-  color: white;
-  font-size: 16px;
-}
-button {
-  background: #3b82f6;
-  color: white;
-  border: 0;
-  border-radius: 11px;
-  padding: 15px;
-  font-weight: 700;
-  font-size: 15px;
-  width: 100%;
-  margin-top: 13px;
-}
-button:disabled { opacity: .5; }
-.tabs, .grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.tabs button { background: #26364e; }
-.tabs .active { background: #3b82f6; }
-.metric {
-  background: #0d1728;
-  border-radius: 11px;
-  padding: 13px;
-  min-width: 0;
-}
-.label { font-size: 12px; color: #aebbd0; }
-.value {
-  font-size: 22px;
-  font-weight: 750;
-  margin-top: 6px;
-  overflow-wrap: anywhere;
-  white-space: pre-line;
-}
-.hero {
-  text-align: center;
-  background: linear-gradient(135deg,#1d3556,#172235);
-}
-.big {
-  font-size: 40px;
-  font-weight: 800;
-  margin: 10px;
-}
-.error { color: #ffaaaa; white-space: pre-wrap; }
-.good { color: #86efac; }
-.section {
-  border-bottom: 1px solid #34445d;
-  padding-bottom: 8px;
-  margin-top: 22px;
-}
-[hidden] { display: none !important; }
-.confidence-badge {
-  display: inline-block;
-  border-radius: 9px;
-  padding: 7px 12px;
-  margin: 7px;
-  font-weight: 750;
-  background: #28364c;
-}
-.confidence-badge.high { color: #86efac; }
-.confidence-badge.medium { color: #fde68a; }
-.confidence-badge.low { color: #fca5a5; }
-@media(max-width:450px) {
-  body { padding: 12px; }
-  .value { font-size: 19px; }
-  .big { font-size: 33px; }
-}
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif}
+*{box-sizing:border-box}
+body{background:#0b1220;color:#f5f7fb;max-width:880px;margin:auto;padding:18px}
+p,.small{color:#afbdd1;line-height:1.5}
+.card{background:#172235;border:1px solid #34445d;border-radius:16px;padding:18px;margin:16px 0}
+h1{font-size:28px}h2{font-size:20px}
+label{display:block;margin:14px 0 6px;color:#d9e2ef}
+select,input{width:100%;padding:14px;background:#0d1728;border:1px solid #50617a;border-radius:10px;color:white;font-size:16px}
+button{background:#3b82f6;color:white;border:0;border-radius:11px;padding:15px;font-weight:700;font-size:15px;width:100%;margin-top:13px}
+button:disabled{opacity:.5}
+.tabs,.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tabs button{background:#26364e}.tabs .active{background:#3b82f6}
+.metric{background:#0d1728;border-radius:11px;padding:13px;min-width:0}
+.label{font-size:12px;color:#aebbd0}
+.value{font-size:22px;font-weight:750;margin-top:6px;overflow-wrap:anywhere;white-space:pre-line}
+.hero{text-align:center;background:linear-gradient(135deg,#1d3556,#172235)}
+.big{font-size:40px;font-weight:800;margin:10px}
+.error{color:#ffaaaa;white-space:pre-wrap}
+.good{color:#86efac}
+.section{border-bottom:1px solid #34445d;padding-bottom:8px;margin-top:22px}
+[hidden]{display:none!important}
+.confidence-badge{display:inline-block;border-radius:9px;padding:7px 12px;margin:7px;font-weight:750;background:#28364c}
+.confidence-badge.high{color:#86efac}.confidence-badge.medium{color:#fde68a}.confidence-badge.low{color:#fca5a5}
+.quick{border:1px solid #43678f;background:#10233b}
+.quick .big{font-size:34px}
+.quick .lean{font-size:26px;font-weight:800;margin:10px 0}
+.quick .lean.over{color:#86efac}.quick .lean.under{color:#fca5a5}
+.why{background:#0d1728;border-radius:11px;padding:13px;margin-top:12px;text-align:left}
+.why p{margin:7px 0}
+@media(max-width:450px){body{padding:12px}.value{font-size:19px}.big{font-size:33px}}
 </style>
 </head>
-
 <body>
-
 <header>
-  <div id="connection" class="small">
-    CONNECTING TO NFL DATA...
-  </div>
-  <h1>🏈 NFL Player Prop Projections</h1>
-  <p>
-    Postgame statistics, receiving and rushing projections,
-    and DraftKings/FanDuel comparisons.
-  </p>
+<div id="connection" class="small">CONNECTING TO NFL DATA...</div>
+<h1>🏈 NFL Player Prop Projections</h1>
+<p>Player usage, position-specific defensive matchups, and DraftKings prop comparisons.</p>
 </header>
 
 <div class="tabs">
-  <button class="active" id="receivingTab"
-    onclick="showPanel('receiving')">
-    RECEIVING PROPS
-  </button>
-  <button id="rushingTab"
-    onclick="showPanel('rushing')">
-    RB RUSHING PROPS
-  </button>
+<button class="active" id="receivingTab" onclick="showPanel('receiving')">RECEIVING PROPS</button>
+<button id="rushingTab" onclick="showPanel('rushing')">RB RUSHING PROPS</button>
 </div>
 
 <div class="card">
-  <h2>1. Select Matchup</h2>
-
-  <label>Offense Team</label>
-  <select id="offense"></select>
-
-  <label>Opposing Defense</label>
-  <select id="defense"></select>
+<h2>1. Select Matchup</h2>
+<label>Offense Team</label><select id="offense"></select>
+<label>Opposing Defense</label><select id="defense"></select>
 </div>
-
-<!-- RECEIVING -->
 
 <section id="receivingPanel">
-
-  <div class="card">
-    <h2>2. Receiving Player</h2>
-
-    <label>Quarterback</label>
-    <select id="qb" disabled></select>
-
-    <label>Wide Receiver / Tight End</label>
-    <select id="receiver" disabled></select>
-  </div>
-
-  <div class="card">
-    <h2>3. Enter Your Own Prop Lines (Optional)</h2>
-
-    <label>Receiving Yards Line</label>
-    <input type="number" min="0" step="0.5"
-      id="line" placeholder="67.5">
-
-    <label>Receptions Line</label>
-    <input type="number" min="0" step="0.5"
-      id="receptionsLine" placeholder="5.5">
-
-    <p class="small">
-      Leave either or both lines blank if you only want projections.
-    </p>
-
-    <button id="calculate" onclick="runProjection()">
-      GENERATE RECEIVING PROJECTION
-    </button>
-
-    <div id="error" class="error"></div>
-  </div>
-
-  <div id="results" hidden>
-
-    <div class="card hero">
-      <div class="small">
-        IMPROVED RECEIVING YARDS PROJECTION
-      </div>
-      <div id="improved" class="big"></div>
-      <div id="matchup"></div>
-      <div id="receivingConfidence"></div>
-    </div>
-
-    <div class="card">
-<h2>Projection Comparison</h2>
-
-<div class="grid">
-
-  <div class="metric">
-    <div class="label"> Original Formula</div>
-    <div class="value" id="original"></div>
-
-    <p class="small">
-       Projected Receptions × Opponent’s Yards Allowed Per Completion
-    </p>
-  </div>
-
-  <div class="metric">
-    <div class="label"> Improved Formula</div>
-    <div class="value" id="improved2"></div>
-
-    <p class="small">
-      Projected receptions × Opposing defense’s average passing yards allowed per completion × Catch rate %
-    </p>
-  </div>
-
+<div class="card">
+<h2>2. Receiving Player</h2>
+<label>Quarterback</label><select id="qb" disabled></select>
+<label>Wide Receiver / Tight End</label><select id="receiver" disabled></select>
+</div>
+<div class="card">
+<h2>3. Your Prop Lines (Optional)</h2>
+<label>Receiving Yards Line</label><input type="number" min="0" step="0.5" id="line" placeholder="67.5">
+<label>Receptions Line</label><input type="number" min="0" step="0.5" id="receptionsLine" placeholder="5.5">
+<p class="small">Manual lines work without live odds. DraftKings lines can be fetched after generating a projection.</p>
+<button id="calculate" onclick="runProjection()">GENERATE RECEIVING PROJECTION</button>
+<div id="error" class="error"></div>
 </div>
 
-      <h2 class="section">Quarterback Statistics</h2>
-      <div class="grid" id="qbMetrics"></div>
+<div id="results" hidden>
+<div class="card hero">
+<div class="small">IMPROVED RECEIVING YARDS PROJECTION</div>
+<div id="improved" class="big"></div>
+<div id="matchup"></div>
+<div id="receivingConfidence"></div>
+</div>
 
-      <h2 class="section">Receiver Statistics</h2>
-      <div class="grid" id="receiverMetrics"></div>
+<div class="card quick">
+<h2>⚡ Quick Read — Receiving Yards</h2>
+<div class="grid" id="receivingQuickMetrics"></div>
+<div class="lean" id="receivingQuickLean"></div>
+<div class="why">
+<strong>📊 Why the model leans this way</strong>
+<div id="receivingWhy"></div>
+</div>
+<p id="receivingQuickSource" class="small"></p>
+</div>
 
-      <h2 class="section">Opposing Defense</h2>
-      <div class="grid" id="receivingDefenseMetrics"></div>
+<div class="card">
+<h2>Projection Comparison</h2>
+<div class="grid">
+<div class="metric">
+<div class="label">Original Formula</div>
+<div class="value" id="original"></div>
+<p class="small">Original usage and opponent passing-efficiency calculation.</p>
+</div>
+<div class="metric">
+<div class="label">Improved Formula</div>
+<div class="value" id="improved2"></div>
+<p class="small">Recent production and usage, adjusted for the opponent's defense against the player's position.</p>
+</div>
+</div>
+<h2 class="section">Quarterback Statistics</h2>
+<div class="grid" id="qbMetrics"></div>
+<h2 class="section">Receiver Statistics</h2>
+<div class="grid" id="receiverMetrics"></div>
+<h2 class="section">Opposing Defense</h2>
+<div class="grid" id="receivingDefenseMetrics"></div>
+<p class="small" id="samples"></p>
+</div>
 
-      <p class="small" id="samples"></p>
-    </div>
+<div class="card" id="sportsbookResult" hidden>
+<h2>Your Manual Prop Lines</h2>
+<div class="grid" id="receivingManual"></div>
+</div>
 
-    <div class="card" id="sportsbookResult" hidden>
-      <h2>Your Prop Line Comparison</h2>
-      <div class="grid" id="receivingManual"></div>
-    </div>
-
-    <div class="card">
-      <h2>Live DraftKings + FanDuel</h2>
-
-      <button id="liveReceiving"
-        onclick="getLive('receiving')">
-        FETCH LIVE RECEIVING PROPS
-      </button>
-
-      <p id="receivingStatus" class="small">
-        Fetch after generating a projection.
-      </p>
-
-      <div class="grid" id="receivingLive"></div>
-    </div>
-
-  </div>
+<div class="card">
+<h2>Live DraftKings</h2>
+<button id="liveReceiving" onclick="getLive('receiving')">FETCH DRAFTKINGS RECEIVING PROPS</button>
+<p id="receivingStatus" class="small">Fetch after generating a projection.</p>
+<div class="grid" id="receivingLive"></div>
+</div>
+</div>
 </section>
-
-<!-- RUSHING -->
 
 <section id="rushingPanel" hidden>
-
-  <div class="card">
-    <h2>2. Running Back</h2>
-
-    <label>Running Back</label>
-    <select id="runningBack" disabled></select>
-  </div>
-
-  <div class="card">
-    <h2>3. Enter Your Own Prop Lines (Optional)</h2>
-
-    <label>Rushing Yards Line</label>
-    <input type="number" min="0" step="0.5"
-      id="rushYardsLine" placeholder="74.5">
-
-    <label>Rushing Attempts Line</label>
-    <input type="number" min="0" step="0.5"
-      id="rushAttemptsLine" placeholder="15.5">
-
-    <p class="small">
-      Leave either or both lines blank if you only want projections.
-    </p>
-
-    <button id="rushCalculate"
-      onclick="runRushingProjection()">
-      GENERATE RUSHING PROJECTION
-    </button>
-
-    <div id="rushError" class="error"></div>
-  </div>
-
-  <div id="rushResults" hidden>
-
-    <div class="card hero">
-      <div class="small">
-        IMPROVED RUSHING YARDS PROJECTION
-      </div>
-
-      <div id="rushProjectedYards" class="big"></div>
-      <div id="rushMatchup"></div>
-      <div id="rushingConfidence"></div>
-    </div>
-
-    <div class="card">
-      <h2>Running Back Projection</h2>
-
-      <div class="grid" id="rushMetrics"></div>
-
-      <h2 class="section">Opposing Run Defense</h2>
-
-      <div class="grid" id="rushDefenseMetrics"></div>
-
-      <p class="small" id="rushSamples"></p>
-    </div>
-
-    <div class="card" id="rushBookResults" hidden>
-      <h2>Your Prop Line Comparison</h2>
-      <div class="grid" id="rushingManual"></div>
-    </div>
-
-    <div class="card">
-      <h2>Live DraftKings + FanDuel</h2>
-
-      <button id="liveRushing"
-        onclick="getLive('rushing')">
-        FETCH LIVE RUSHING PROPS
-      </button>
-
-      <p id="rushingStatus" class="small">
-        Fetch after generating a projection.
-      </p>
-
-      <div class="grid" id="rushingLive"></div>
-    </div>
-
-  </div>
-</section>
 <div class="card">
-  <h2>📊 Confidence Rating Guide</h2>
-
-  <p>
-    🟢 <strong>HIGH CONFIDENCE</strong><br>
-    Stronger statistical support. The player's
-    performance has been relatively consistent.
-  </p>
-
-  <p>
-    🟡 <strong>MEDIUM CONFIDENCE</strong><br>
-    Moderate statistical support. Some variation
-    in the player's recent performance.
-  </p>
-
-  <p>
-    🔴 <strong>LOW CONFIDENCE</strong><br>
-    Greater uncertainty due to limited data
-    or inconsistent performance.
-  </p>
-
-  <p class="small">
-    <strong>Remember:</strong>
-    Confidence measures statistical support
-    for the projection, not the probability
-    of winning a bet.
-  </p>
+<h2>2. Running Back</h2>
+<label>Running Back</label><select id="runningBack" disabled></select>
 </div>
+<div class="card">
+<h2>3. Your Prop Lines (Optional)</h2>
+<label>Rushing Yards Line</label><input type="number" min="0" step="0.5" id="rushYardsLine" placeholder="74.5">
+<label>Rushing Attempts Line</label><input type="number" min="0" step="0.5" id="rushAttemptsLine" placeholder="15.5">
+<p class="small">Leave lines blank for projections only.</p>
+<button id="rushCalculate" onclick="runRushingProjection()">GENERATE RUSHING PROJECTION</button>
+<div id="rushError" class="error"></div>
+</div>
+
+<div id="rushResults" hidden>
+<div class="card hero">
+<div class="small">IMPROVED RUSHING YARDS PROJECTION</div>
+<div id="rushProjectedYards" class="big"></div>
+<div id="rushMatchup"></div>
+<div id="rushingConfidence"></div>
+</div>
+
+<div class="card quick">
+<h2>⚡ Quick Read — Rushing Yards</h2>
+<div class="grid" id="rushingQuickMetrics"></div>
+<div class="lean" id="rushingQuickLean"></div>
+<div class="why">
+<strong>📊 Why the model leans this way</strong>
+<div id="rushingWhy"></div>
+</div>
+<p id="rushingQuickSource" class="small"></p>
+</div>
+
+<div class="card">
+<h2>Running Back Projection</h2>
+<div class="grid" id="rushMetrics"></div>
+<h2 class="section">Opposing Run Defense</h2>
+<div class="grid" id="rushDefenseMetrics"></div>
+<p class="small" id="rushSamples"></p>
+</div>
+
+<div class="card" id="rushBookResults" hidden>
+<h2>Your Manual Prop Lines</h2>
+<div class="grid" id="rushingManual"></div>
+</div>
+
+<div class="card">
+<h2>Live DraftKings</h2>
+<button id="liveRushing" onclick="getLive('rushing')">FETCH DRAFTKINGS RUSHING PROPS</button>
+<p id="rushingStatus" class="small">Fetch after generating a projection.</p>
+<div class="grid" id="rushingLive"></div>
+</div>
+</div>
+</section>
+
+<div class="card">
+<h2>📊 Confidence Rating Guide</h2>
+<p>🟢 <strong>HIGH</strong><br>Stronger statistical support and relatively consistent results.</p>
+<p>🟡 <strong>MEDIUM</strong><br>Moderate statistical support, with some variation.</p>
+<p>🔴 <strong>LOW</strong><br>Limited samples or inconsistent performance.</p>
+<p class="small"><strong>Important:</strong> Confidence is a data-quality label, not a probability of winning a bet.</p>
+</div>
+
 <footer class="small">
-  NFL statistics via nflverse (postgame).
-  Sportsbook lines require an Odds API key.
-  Cached odds may be older than current sportsbook prices.
-  Confidence labels are not win probabilities.
-  Always verify lines before placing a bet.
+NFL statistics via nflverse (postgame). DraftKings lines via The Odds API.
+Cached odds may be older than current sportsbook prices.
+Verify all lines before placing a bet.
 </footer>
 
 <script>
-
 const $ = id => document.getElementById(id);
+let projections = {receiving:null,rushing:null};
+let liveBooks = {receiving:null,rushing:null};
 
-let projections = {
-  receiving: null,
-  rushing: null
-};
-
-function showPanel(panel) {
-  const receiving = panel === "receiving";
-
-  $("receivingPanel").hidden = !receiving;
-  $("rushingPanel").hidden = receiving;
-
-  $("receivingTab").classList.toggle("active", receiving);
-  $("rushingTab").classList.toggle("active", !receiving);
+function showPanel(panel){
+const receiving=panel==="receiving";
+$("receivingPanel").hidden=!receiving;
+$("rushingPanel").hidden=receiving;
+$("receivingTab").classList.toggle("active",receiving);
+$("rushingTab").classList.toggle("active",!receiving);
 }
 
-function confidenceBadge(value, label) {
-  const badge = document.createElement("span");
-
-  const level = ["HIGH", "MEDIUM", "LOW"].includes(value)
-    ? value
-    : "UNAVAILABLE";
-
-  badge.className = "confidence-badge " + level.toLowerCase();
-
-  const icons = {
-    HIGH: "🟢",
-    MEDIUM: "🟡",
-    LOW: "🔴",
-    UNAVAILABLE: "⚪"
-  };
-
-  badge.textContent =
-    icons[level] + " " + label + ": " + level;
-
-  return badge;
+function confidenceBadge(value,label){
+const badge=document.createElement("span");
+const level=["HIGH","MEDIUM","LOW"].includes(value)?value:"UNAVAILABLE";
+badge.className="confidence-badge "+level.toLowerCase();
+const icons={HIGH:"🟢",MEDIUM:"🟡",LOW:"🔴",UNAVAILABLE:"⚪"};
+badge.textContent=icons[level]+" "+label+": "+level;
+return badge;
 }
-
-function showConfidence(id, entries) {
-  const element = $(id);
-
-  element.replaceChildren(
-    ...entries.map(([label, value]) =>
-      confidenceBadge(value, label)
-    )
-  );
+function showConfidence(id,entries){
+$(id).replaceChildren(...entries.map(([label,value])=>confidenceBadge(value,label)));
 }
-
-function metric(label, value) {
-  const box = document.createElement("div");
-  box.className = "metric";
-
-  const title = document.createElement("div");
-  title.className = "label";
-  title.textContent = label;
-
-  const number = document.createElement("div");
-  number.className = "value";
-  number.textContent = value ?? "—";
-
-  box.append(title, number);
-
-  return box;
+function metric(label,value){
+const box=document.createElement("div");
+box.className="metric";
+const title=document.createElement("div");
+title.className="label";
+title.textContent=label;
+const number=document.createElement("div");
+number.className="value";
+number.textContent=value??"—";
+box.append(title,number);
+return box;
 }
-
-function metrics(id, items) {
-  $(id).replaceChildren(
-    ...items.map(item => metric(item[0], item[1]))
-  );
+function metrics(id,items){
+$(id).replaceChildren(...items.map(item=>metric(item[0],item[1])));
 }
-
-function comparison(projected, entry, unit) {
-  if (!entry || entry.line == null) {
-    return "Not entered";
-  }
-
-  const edge = Math.round(
-    (Number(projected) - Number(entry.line)) * 100
-  ) / 100;
-
-  const lean =
-    edge > 0 ? "OVER" :
-    edge < 0 ? "UNDER" : "EVEN";
-
-  let text =
-    "Line: " + entry.line + " " + unit +
-    "\nEdge: " + (edge > 0 ? "+" : "") + edge +
-    "\nModel lean: " + lean;
-
-  if (entry.over_price != null) {
-    text += "\nOver odds: " + entry.over_price;
-  }
-
-  return text;
+function comparison(projected,entry,unit){
+if(!entry||entry.line==null)return "Not posted / entered";
+const edge=Math.round((Number(projected)-Number(entry.line))*100)/100;
+const lean=edge>0?"OVER":edge<0?"UNDER":"EVEN";
+let text="Line: "+entry.line+" "+unit+
+"\nEdge: "+(edge>0?"+":"")+edge+
+"\nModel lean: "+lean;
+if(entry.over_price!=null)text+="\nOver odds: "+entry.over_price;
+return text;
 }
-
-async function jsonFetch(url) {
-  const response = await fetch(url);
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw Error(
-      typeof data.detail === "string"
-        ? data.detail
-        : "Request failed"
-    );
-  }
-
-  return data;
+async function jsonFetch(url){
+const response=await fetch(url);
+const data=await response.json();
+if(!response.ok)throw Error(typeof data.detail==="string"?data.detail:"Request failed");
+return data;
 }
-
-async function loadTeams() {
-  try {
-    const teams = await jsonFetch("/api/teams");
-
-    for (const id of ["offense", "defense"]) {
-      const select = $(id);
-
-      select.replaceChildren(
-        new Option("Select team", "")
-      );
-
-      teams.forEach(team => {
-        select.add(new Option(team.name, team.code));
-      });
-    }
-
-    $("connection").textContent =
-      "NFL DATA CONNECTION READY";
-
-  } catch (error) {
-    $("connection").textContent = error.message;
-  }
+async function loadTeams(){
+try{
+const teams=await jsonFetch("/api/teams");
+for(const id of ["offense","defense"]){
+const select=$(id);
+select.replaceChildren(new Option("Select team",""));
+teams.forEach(team=>select.add(new Option(team.name,team.code)));
 }
-
-async function loadRoster() {
-  projections.receiving = null;
-  projections.rushing = null;
-
-  $("results").hidden = true;
-  $("rushResults").hidden = true;
-
-  for (const id of ["qb", "receiver", "runningBack"]) {
-    $(id).disabled = true;
-
-    $(id).replaceChildren(
-      new Option("Loading players...", "")
-    );
-  }
-
-  if (!$("offense").value) {
-    return;
-  }
-
-  try {
-    const roster = await jsonFetch(
-      "/api/roster?team=" +
-      encodeURIComponent($("offense").value)
-    );
-
-    const groups = [
-      ["qb", "quarterbacks"],
-      ["receiver", "receivers"],
-      ["runningBack", "running_backs"]
-    ];
-
-    for (const [id, key] of groups) {
-      const select = $(id);
-
-      select.replaceChildren(
-        new Option("Select player", "")
-      );
-
-      (roster[key] || []).forEach(player => {
-        select.add(new Option(player.name, player.name));
-      });
-
-      select.disabled = false;
-    }
-
-  } catch (error) {
-    $("error").textContent = error.message;
-    $("rushError").textContent = error.message;
-  }
+$("connection").textContent="NFL DATA CONNECTION READY";
+}catch(error){$("connection").textContent=error.message;}
 }
-
-function checkMatchup(player) {
-  if (
-    !$("offense").value ||
-    !$("defense").value ||
-    !player
-  ) {
-    throw Error(
-      "Select an offense team, opposing defense, and player."
-    );
-  }
-
-  if ($("offense").value === $("defense").value) {
-    throw Error(
-      "Offense and defense cannot be the same team."
-    );
-  }
+async function loadRoster(){
+projections={receiving:null,rushing:null};
+liveBooks={receiving:null,rushing:null};
+$("results").hidden=true;
+$("rushResults").hidden=true;
+for(const id of ["qb","receiver","runningBack"]){
+$(id).disabled=true;
+$(id).replaceChildren(new Option("Loading players...",""));
 }
-
-function addLine(params, inputId, parameterName) {
-  const value = $(inputId).value;
-
-  if (value === "") {
-    return false;
-  }
-
-  if (
-    !Number.isFinite(Number(value)) ||
-    Number(value) < 0
-  ) {
-    throw Error("Enter a valid nonnegative prop line.");
-  }
-
-  params.set(parameterName, value);
-
-  return true;
+if(!$("offense").value)return;
+try{
+const roster=await jsonFetch("/api/roster?team="+encodeURIComponent($("offense").value));
+const groups=[["qb","quarterbacks"],["receiver","receivers"],["runningBack","running_backs"]];
+for(const [id,key] of groups){
+const select=$(id);
+select.replaceChildren(new Option("Select player",""));
+(roster[key]||[]).forEach(player=>select.add(new Option(player.name,player.name)));
+select.disabled=false;
 }
-
-// RECEIVING PROJECTION
-
-async function runProjection() {
-  const button = $("calculate");
-
-  $("error").textContent = "";
-  $("results").hidden = true;
-  button.disabled = true;
-
-  try {
-    checkMatchup($("receiver").value);
-
-    if (!$("qb").value) {
-      throw Error("Select a quarterback.");
-    }
-
-    const params = new URLSearchParams({
-      offense_team: $("offense").value,
-      qb: $("qb").value,
-      receiver: $("receiver").value,
-      defense: $("defense").value
-    });
-
-    const hasYards = addLine(
-      params, "line", "line"
-    );
-
-    const hasReceptions = addLine(
-      params, "receptionsLine", "receptions_line"
-    );
-
-    const hasManualLine = hasYards || hasReceptions;
-
-    const data = await jsonFetch(
-      "/api/project?" + params.toString()
-    );
-
-    projections.receiving = data;
-
-    $("improved").textContent =
-      data.improved_projection + " YARDS";
-
-    $("matchup").textContent =
-      data.quarterback + " / " +
-      data.receiver + " vs. " +
-      data.opponent_name;
-
-    $("original").textContent =
-      data.original_projection;
-
-    $("improved2").textContent =
-      data.improved_projection;
-
-    showConfidence("receivingConfidence", [
-      ["Receiving Yards", data.confidence?.receiving_yards],
-      ["Receptions", data.confidence?.receptions]
-    ]);
-
-    metrics("qbMetrics", [
-      ["Average Attempts", data.qb_attempts_weighted],
-      ["Average Completions", data.qb_completions_weighted]
-    ]);
-
-    metrics("receiverMetrics", [
-      ["Target Share", data.target_share + "%"],
-      ["Catch Rate", data.catch_rate + "%"],
-      ["Recent Receiving Yards",
-        data.receiver_recent_yards_average],
-      ["Projected Targets", data.projected_targets],
-      ["Projected Receptions", data.projected_receptions]
-    ]);
-
-    metrics("receivingDefenseMetrics", [
-      ["Passing Yards Allowed / Completion",
-        data.yards_per_completion_allowed]
-    ]);
-
-    $("samples").textContent =
-      "Matched games: " + data.matched_games +
-      " | Defensive games: " +
-      data.defense_games_sampled;
-
-    $("sportsbookResult").hidden = !hasManualLine;
-
-    if (hasManualLine) {
-      metrics("receivingManual", [
-        ["Receiving Yards",
-          comparison(
-            data.improved_projection,
-            hasYards ? {line: Number($("line").value)} : null,
-            "yards"
-          )
-        ],
-        ["Receptions",
-          comparison(
-            data.projected_receptions,
-            hasReceptions
-              ? {line: Number($("receptionsLine").value)}
-              : null,
-            "receptions"
-          )
-        ]
-      ]);
-    }
-
-    $("results").hidden = false;
-
-  } catch (error) {
-    $("error").textContent = error.message;
-
-  } finally {
-    button.disabled = false;
-  }
+}catch(error){
+$("error").textContent=error.message;
+$("rushError").textContent=error.message;
 }
-
-// RUSHING PROJECTION
-
-async function runRushingProjection() {
-  const button = $("rushCalculate");
-
-  $("rushError").textContent = "";
-  $("rushResults").hidden = true;
-  button.disabled = true;
-
-  try {
-    checkMatchup($("runningBack").value);
-
-    const params = new URLSearchParams({
-      offense_team: $("offense").value,
-      running_back: $("runningBack").value,
-      defense: $("defense").value
-    });
-
-    const hasYards = addLine(
-      params, "rushYardsLine", "yards_line"
-    );
-
-    const hasAttempts = addLine(
-      params, "rushAttemptsLine", "attempts_line"
-    );
-
-    const hasManualLine = hasYards || hasAttempts;
-
-    const data = await jsonFetch(
-      "/api/project/rushing?" + params.toString()
-    );
-
-    projections.rushing = data;
-
-    $("rushProjectedYards").textContent =
-      data.projected_rushing_yards + " YARDS";
-
-    $("rushMatchup").textContent =
-      data.running_back + " vs. " +
-      data.opponent_name;
-
-    showConfidence("rushingConfidence", [
-      ["Rushing Yards", data.confidence?.rushing_yards],
-      ["Rushing Attempts", data.confidence?.rushing_attempts]
-    ]);
-
-    metrics("rushMetrics", [
-      ["Projected Attempts", data.projected_attempts],
-      ["Improved Rushing Yards",
-        data.improved_projected_rushing_yards],
-      ["Original Blended Yards",
-        data.original_projected_rushing_yards],
-      ["Player Average Attempts",
-        data.player_attempts_average],
-      ["Player Average Rushing Yards",
-        data.player_rushing_yards_average],
-      ["Player Yards Per Carry",
-        data.player_yards_per_carry],
-      ["Team Attempts Average",
-        data.team_attempts_average],
-      ["Player Carry Share", data.carry_share + "%"],
-      ["Original Blended YPC",
-        data.adjusted_yards_per_carry]
-    ]);
-
-    metrics("rushDefenseMetrics", [
-      ["Rushing Yards Allowed / Attempt",
-        data.defense_yards_per_attempt_allowed]
-    ]);
-
-    $("rushSamples").textContent =
-      "Player games: " + data.player_games_sampled +
-      " | Defensive games: " +
-      data.defense_games_sampled;
-
-    $("rushBookResults").hidden = !hasManualLine;
-
-    if (hasManualLine) {
-      metrics("rushingManual", [
-        ["Rushing Yards",
-          comparison(
-            data.projected_rushing_yards,
-            hasYards
-              ? {line: Number($("rushYardsLine").value)}
-              : null,
-            "yards"
-          )
-        ],
-        ["Rushing Attempts",
-          comparison(
-            data.projected_attempts,
-            hasAttempts
-              ? {line: Number($("rushAttemptsLine").value)}
-              : null,
-            "attempts"
-          )
-        ]
-      ]);
-    }
-
-    $("rushResults").hidden = false;
-
-  } catch (error) {
-    $("rushError").textContent = error.message;
-
-  } finally {
-    button.disabled = false;
-  }
 }
-
-// LIVE DRAFTKINGS AND FANDUEL
-
-async function getLive(kind) {
-  const data = projections[kind];
-
-  const button = $(
-    kind === "receiving"
-      ? "liveReceiving"
-      : "liveRushing"
-  );
-
-  const status = $(kind + "Status");
-
-  if (!data) {
-    status.textContent =
-      "Generate a projection first.";
-    return;
-  }
-
-  button.disabled = true;
-
-  status.textContent =
-    "Fetching sportsbook lines...";
-
-  try {
-    const player = kind === "receiving"
-      ? data.receiver
-      : data.running_back;
-
-    const params = new URLSearchParams({
-      offense_team: data.offense_team,
-      defense: data.defense,
-      player: player
-    });
-
-    const odds = await jsonFetch(
-      "/api/live-odds?" + params.toString()
-    );
-
-    const props = kind === "receiving"
-      ? [
-          ["receiving_yards", "Receiving Yards",
-            data.improved_projection, "yards"],
-          ["receptions", "Receptions",
-            data.projected_receptions, "receptions"]
-        ]
-      : [
-          ["rushing_yards", "Rushing Yards",
-            data.projected_rushing_yards, "yards"],
-          ["rushing_attempts", "Rushing Attempts",
-            data.projected_attempts, "attempts"]
-        ];
-
-    const target = $(kind + "Live");
-    target.replaceChildren();
-
-    for (const book of ["DraftKings", "FanDuel"]) {
-      const wrapper = document.createElement("div");
-      wrapper.className = "metric";
-
-      const heading = document.createElement("h3");
-      heading.textContent = book;
-      wrapper.append(heading);
-
-      for (const [key, label, projection, unit] of props) {
-        const title = document.createElement("div");
-        title.className = "label";
-        title.textContent = label;
-
-        const result = document.createElement("p");
-        result.style.whiteSpace = "pre-line";
-
-        const entry = odds.books?.[book]?.[key];
-
-        result.textContent = entry
-          ? comparison(projection, entry, unit)
-          : "Not posted";
-
-        wrapper.append(title, result);
-
-        if (entry?.last_update) {
-          const time = document.createElement("div");
-          time.className = "small";
-          time.textContent =
-            "Book updated: " +
-            new Date(entry.last_update).toLocaleString();
-
-          wrapper.append(time);
-        }
-      }
-
-      target.append(wrapper);
-    }
-
-    status.textContent =
-      (odds.message || "Lines retrieved.") +
-      " Fetched: " +
-      new Date(odds.updated_at).toLocaleString();
-
-  } catch (error) {
-    status.textContent = error.message;
-
-  } finally {
-    button.disabled = false;
-  }
+function checkMatchup(player){
+if(!$("offense").value||!$("defense").value||!player)
+throw Error("Select an offense team, opposing defense, and player.");
+if($("offense").value===$("defense").value)
+throw Error("Offense and defense cannot be the same team.");
 }
-
-// INITIALIZE
-
-$("offense").addEventListener("change", loadRoster);
-
-for (const id of ["defense", "qb", "receiver", "runningBack"]) {
-  $(id).addEventListener("change", () => {
-    projections.receiving = null;
-    projections.rushing = null;
-    $("results").hidden = true;
-    $("rushResults").hidden = true;
-  });
+function addLine(params,inputId,parameterName){
+const value=$(inputId).value;
+if(value==="")return false;
+if(!Number.isFinite(Number(value))||Number(value)<0)
+throw Error("Enter a valid nonnegative prop line.");
+params.set(parameterName,value);
+return true;
 }
-
+function manualEntry(id){
+return $(id).value===""?null:{line:Number($(id).value)};
+}
+function formatNumber(value){
+const n=Number(value);
+return Number.isFinite(n)?n.toFixed(2):"—";
+}
+function displayQuick(kind){
+const data=projections[kind];
+if(!data)return;
+const receiving=kind==="receiving";
+const projection=receiving?data.improved_projection:data.projected_rushing_yards;
+const manual=manualEntry(receiving?"line":"rushYardsLine");
+const key=receiving?"receiving_yards":"rushing_yards";
+const dk=liveBooks[kind]?.[key];
+const entry=dk||manual;
+const source=dk?"DraftKings":manual?"Your manual line":"No line entered";
+const edge=entry?Number(projection)-Number(entry.line):null;
+const direction=edge===null?"NO LINE":edge>0?"OVER":edge<0?"UNDER":"EVEN";
+const prefix=receiving?"receiving":"rushing";
+metrics(prefix+"QuickMetrics",[
+["Improved Projection",formatNumber(projection)+" yards"],
+["Prop Line",entry?entry.line+" yards":"Not available"],
+["Model Edge",edge===null?"—":(edge>0?"+":"")+formatNumber(edge)+" yards"],
+["Confidence",data.confidence?.[key]||"UNAVAILABLE"]
+]);
+const leanEl=$(prefix+"QuickLean");
+leanEl.className="lean "+direction.toLowerCase();
+leanEl.textContent="MODEL LEAN: "+direction;
+$(prefix+"QuickSource").textContent="Line source: "+source+(dk?" (cached/live API response)":"");
+const why=$(prefix+"Why");
+why.replaceChildren();
+let reasons=data.adjustment_reasons||data.reasons||data.why||[];
+if(!Array.isArray(reasons))reasons=[];
+if(!reasons.length){
+const usage=data.usage_adjustment;
+const matchup=data.matchup_adjustment;
+if(usage!=null)reasons.push("Player usage adjustment: "+usage);
+if(matchup!=null)reasons.push("Position-specific defensive matchup adjustment: "+matchup);
+}
+if(!reasons.length){
+reasons=[
+"Recent player performance and workload are included in the projection.",
+"Opponent defensive statistics are included in the model."
+];
+}
+reasons.forEach(reason=>{
+const p=document.createElement("p");
+p.textContent="• "+String(reason);
+why.append(p);
+});
+}
+async function runProjection(){
+const button=$("calculate");
+$("error").textContent="";
+$("results").hidden=true;
+button.disabled=true;
+try{
+checkMatchup($("receiver").value);
+if(!$("qb").value)throw Error("Select a quarterback.");
+const params=new URLSearchParams({
+offense_team:$("offense").value,
+qb:$("qb").value,
+receiver:$("receiver").value,
+defense:$("defense").value
+});
+const hasYards=addLine(params,"line","line");
+const hasReceptions=addLine(params,"receptionsLine","receptions_line");
+const data=await jsonFetch("/api/project?"+params.toString());
+projections.receiving=data;
+liveBooks.receiving=null;
+$("receivingLive").replaceChildren();
+$("receivingStatus").textContent="Fetch after generating a projection.";
+$("improved").textContent=data.improved_projection+" YARDS";
+$("matchup").textContent=data.quarterback+" / "+data.receiver+" vs. "+data.opponent_name;
+$("original").textContent=data.original_projection;
+$("improved2").textContent=data.improved_projection;
+showConfidence("receivingConfidence",[
+["Receiving Yards",data.confidence?.receiving_yards],
+["Receptions",data.confidence?.receptions]
+]);
+metrics("qbMetrics",[
+["Average Attempts",data.qb_attempts_weighted],
+["Average Completions",data.qb_completions_weighted]
+]);
+metrics("receiverMetrics",[
+["Target Share",data.target_share+"%"],
+["Catch Rate",data.catch_rate+"%"],
+["Recent Receiving Yards",data.receiver_recent_yards_average],
+["Projected Targets",data.projected_targets],
+["Projected Receptions",data.projected_receptions]
+]);
+const defenseItems=[
+["Passing Yards Allowed / Completion",data.yards_per_completion_allowed]
+];
+if(data.position_yards_allowed_per_game!=null)
+defenseItems.push(["Position Yards Allowed / Game",data.position_yards_allowed_per_game]);
+if(data.position_matchup_factor!=null)
+defenseItems.push(["Position Matchup Factor",data.position_matchup_factor]);
+metrics("receivingDefenseMetrics",defenseItems);
+$("samples").textContent="Matched games: "+data.matched_games+
+" | Defensive games: "+data.defense_games_sampled;
+$("sportsbookResult").hidden=!(hasYards||hasReceptions);
+if(hasYards||hasReceptions){
+metrics("receivingManual",[
+["Receiving Yards",comparison(data.improved_projection,hasYards?manualEntry("line"):null,"yards")],
+["Receptions",comparison(data.projected_receptions,hasReceptions?manualEntry("receptionsLine"):null,"receptions")]
+]);
+}
+displayQuick("receiving");
+$("results").hidden=false;
+}catch(error){$("error").textContent=error.message;}
+finally{button.disabled=false;}
+}
+async function runRushingProjection(){
+const button=$("rushCalculate");
+$("rushError").textContent="";
+$("rushResults").hidden=true;
+button.disabled=true;
+try{
+checkMatchup($("runningBack").value);
+const params=new URLSearchParams({
+offense_team:$("offense").value,
+running_back:$("runningBack").value,
+defense:$("defense").value
+});
+const hasYards=addLine(params,"rushYardsLine","yards_line");
+const hasAttempts=addLine(params,"rushAttemptsLine","attempts_line");
+const data=await jsonFetch("/api/project/rushing?"+params.toString());
+projections.rushing=data;
+liveBooks.rushing=null;
+$("rushingLive").replaceChildren();
+$("rushingStatus").textContent="Fetch after generating a projection.";
+$("rushProjectedYards").textContent=data.projected_rushing_yards+" YARDS";
+$("rushMatchup").textContent=data.running_back+" vs. "+data.opponent_name;
+showConfidence("rushingConfidence",[
+["Rushing Yards",data.confidence?.rushing_yards],
+["Rushing Attempts",data.confidence?.rushing_attempts]
+]);
+metrics("rushMetrics",[
+["Projected Attempts",data.projected_attempts],
+["Improved Rushing Yards",data.improved_projected_rushing_yards],
+["Original Blended Yards",data.original_projected_rushing_yards],
+["Player Average Attempts",data.player_attempts_average],
+["Player Average Rushing Yards",data.player_rushing_yards_average],
+["Player Yards Per Carry",data.player_yards_per_carry],
+["Team Attempts Average",data.team_attempts_average],
+["Player Carry Share",data.carry_share+"%"],
+["Original Blended YPC",data.adjusted_yards_per_carry]
+]);
+const defenseItems=[["Rushing Yards Allowed / Attempt",data.defense_yards_per_attempt_allowed]];
+if(data.position_rushing_yards_allowed_per_game!=null)
+defenseItems.push(["RB Yards Allowed / Game",data.position_rushing_yards_allowed_per_game]);
+if(data.position_matchup_factor!=null)
+defenseItems.push(["Position Matchup Factor",data.position_matchup_factor]);
+metrics("rushDefenseMetrics",defenseItems);
+$("rushSamples").textContent="Player games: "+data.player_games_sampled+
+" | Defensive games: "+data.defense_games_sampled;
+$("rushBookResults").hidden=!(hasYards||hasAttempts);
+if(hasYards||hasAttempts){
+metrics("rushingManual",[
+["Rushing Yards",comparison(data.projected_rushing_yards,hasYards?manualEntry("rushYardsLine"):null,"yards")],
+["Rushing Attempts",comparison(data.projected_attempts,hasAttempts?manualEntry("rushAttemptsLine"):null,"attempts")]
+]);
+}
+displayQuick("rushing");
+$("rushResults").hidden=false;
+}catch(error){$("rushError").textContent=error.message;}
+finally{button.disabled=false;}
+}
+async function getLive(kind){
+const data=projections[kind];
+const button=$(kind==="receiving"?"liveReceiving":"liveRushing");
+const status=$(kind+"Status");
+if(!data){status.textContent="Generate a projection first.";return;}
+button.disabled=true;
+status.textContent="Fetching DraftKings lines...";
+try{
+const player=kind==="receiving"?data.receiver:data.running_back;
+const params=new URLSearchParams({
+offense_team:data.offense_team,
+defense:data.defense,
+player
+});
+const odds=await jsonFetch("/api/live-odds?"+params.toString());
+const props=kind==="receiving"
+?[["receiving_yards","Receiving Yards",data.improved_projection,"yards"],
+["receptions","Receptions",data.projected_receptions,"receptions"]]
+:[["rushing_yards","Rushing Yards",data.projected_rushing_yards,"yards"],
+["rushing_attempts","Rushing Attempts",data.projected_attempts,"attempts"]];
+const target=$(kind+"Live");
+target.replaceChildren();
+const book=odds.books?.DraftKings||{};
+liveBooks[kind]=book;
+const wrapper=document.createElement("div");
+wrapper.className="metric";
+const heading=document.createElement("h3");
+heading.textContent="DraftKings";
+wrapper.append(heading);
+for(const [key,label,projection,unit] of props){
+const title=document.createElement("div");
+title.className="label";
+title.textContent=label;
+const result=document.createElement("p");
+result.style.whiteSpace="pre-line";
+const entry=book[key];
+result.textContent=entry?comparison(projection,entry,unit):"Not posted";
+wrapper.append(title,result);
+if(entry?.last_update){
+const time=document.createElement("div");
+time.className="small";
+time.textContent="Book updated: "+new Date(entry.last_update).toLocaleString();
+wrapper.append(time);
+}
+}
+target.append(wrapper);
+status.textContent=(odds.message||"Lines retrieved.")+
+" Fetched: "+new Date(odds.updated_at).toLocaleString();
+displayQuick(kind);
+}catch(error){status.textContent=error.message;}
+finally{button.disabled=false;}
+}
+$("offense").addEventListener("change",loadRoster);
+for(const id of ["defense","qb","receiver","runningBack"]){
+$(id).addEventListener("change",()=>{
+projections.receiving=null;
+projections.rushing=null;
+liveBooks.receiving=null;
+liveBooks.rushing=null;
+$("results").hidden=true;
+$("rushResults").hidden=true;
+});
+}
 loadTeams();
-
 </script>
-
 </body>
 </html>
