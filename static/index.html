@@ -168,6 +168,91 @@ button:disabled {
   color: #fca5a5;
 }
 
+/* SMALL INFORMATION ICONS */
+
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin: 0 0 0 5px;
+  border: 1px solid #64748b;
+  border-radius: 50%;
+  background: transparent;
+  color: #aebbd0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.info-icon:hover,
+.info-icon:focus-visible {
+  color: #fff;
+  border-color: #93c5fd;
+  background: #26364e;
+}
+
+.info-icon:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+/* EXPLANATION POP-UP */
+
+.info-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.78);
+}
+
+.info-dialog {
+  width: 100%;
+  max-width: 470px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: #172235;
+  border: 1px solid #50617a;
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+.info-dialog h2 {
+  margin-top: 0;
+  color: #fff;
+}
+
+.info-dialog p {
+  color: #d9e2ef;
+  line-height: 1.6;
+}
+
+.info-dialog strong {
+  color: #fff;
+}
+
+.info-close {
+  margin-top: 18px;
+}
+
+body.info-open {
+  overflow: hidden;
+}
+
+.weekly-inline {
+  display: inline;
+}
+
 @media(max-width:450px) {
   body {
     padding: 12px;
@@ -179,6 +264,10 @@ button:disabled {
 
   .big {
     font-size: 33px;
+  }
+
+  .info-dialog {
+    padding: 18px;
   }
 }
 </style>
@@ -283,6 +372,7 @@ button:disabled {
     <div class="card hero">
       <div class="small">
         IMPROVED RECEIVING YARDS PROJECTION
+        <span id="receivingHeroInfo"></span>
       </div>
 
       <div id="improved" class="big"></div>
@@ -323,7 +413,11 @@ button:disabled {
       <h2 class="section">Receiver Statistics</h2>
       <div class="grid" id="receiverMetrics"></div>
 
-      <h2 class="section">Opposing Defense</h2>
+      <h2 class="section">
+        Opposing Defense
+        <span id="receivingDefenseInfo"></span>
+      </h2>
+
       <div class="grid" id="receivingDefenseMetrics"></div>
 
       <p class="small" id="samples"></p>
@@ -409,6 +503,7 @@ button:disabled {
     <div class="card hero">
       <div class="small">
         IMPROVED RUSHING YARDS PROJECTION
+        <span id="rushingHeroInfo"></span>
       </div>
 
       <div id="rushProjectedYards" class="big"></div>
@@ -440,6 +535,7 @@ button:disabled {
 
       <h2 class="section">
         Opponent Defense vs RB Receiving
+        <span id="rbReceivingDefenseInfo"></span>
       </h2>
 
       <div class="grid" id="rbReceivingDefense"></div>
@@ -452,7 +548,10 @@ button:disabled {
 
       <div class="grid" id="rushMetrics"></div>
 
-      <h2 class="section">Opposing Run Defense</h2>
+      <h2 class="section">
+        Opposing Run Defense
+        <span id="rushingDefenseInfo"></span>
+      </h2>
 
       <div class="grid" id="rushDefenseMetrics"></div>
 
@@ -518,7 +617,11 @@ button:disabled {
   <div id="qbResults" hidden>
 
     <div class="card hero">
-      <div class="small">PROJECTED PASSING YARDS</div>
+      <div class="small">
+        PROJECTED PASSING YARDS
+        <span id="qbHeroInfo"></span>
+      </div>
+
       <div class="big" id="qbHero"></div>
       <div id="qbMatchup"></div>
     </div>
@@ -543,13 +646,17 @@ button:disabled {
 
       <h2 class="section">
         Opponent Defense vs Quarterbacks
+        <span id="qbDefenseInfo"></span>
       </h2>
 
       <div class="grid" id="qbDefense"></div>
 
       <p class="small" id="qbSamples"></p>
 
-      <h2 class="section">Data Confidence</h2>
+      <h2 class="section">
+        Data Confidence
+        <span id="qbConfidenceInfo"></span>
+      </h2>
 
       <div id="qbConfidence"></div>
 
@@ -606,33 +713,7 @@ button:disabled {
   </div>
 </section>
 
-<!-- CONFIDENCE GUIDE -->
-
-<div class="card">
-  <h2>📊 Confidence Rating Guide</h2>
-
-  <p>
-    🟢 <strong>HIGH</strong> —
-    Stronger statistical support and relatively
-    consistent performance.
-  </p>
-
-  <p>
-    🟡 <strong>MEDIUM</strong> —
-    Moderate statistical support,
-    with some variation.
-  </p>
-
-  <p>
-    🔴 <strong>LOW</strong> —
-    Greater uncertainty from limited data
-    or inconsistent performance.
-  </p>
-
-  <p class="small">
-    Confidence is not a probability of winning a bet.
-  </p>
-</div>
+<!-- CONFIDENCE GUIDE REMOVED -->
 
 <footer class="small">
   NFL statistics via nflverse (postgame).
@@ -644,6 +725,32 @@ button:disabled {
   not win probabilities.
   Edges are model differences, not probabilities.
 </footer>
+
+<!-- HIDDEN STAT EXPLANATION POP-UP -->
+
+<div
+  id="infoModal"
+  class="info-modal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="infoTitle"
+  hidden
+>
+  <div class="info-dialog">
+
+    <h2 id="infoTitle"></h2>
+
+    <div id="infoContent"></div>
+
+    <button
+      type="button"
+      class="info-close"
+      onclick="closeInfo()">
+      CLOSE
+    </button>
+
+  </div>
+</div>
 
 <script>
 
@@ -658,6 +765,304 @@ let rbDraftKings = {};
 let qbProjection = null;
 let qbDraftKings = {};
 let weeklyLoaded = false;
+
+/* FIVE STAT EXPLANATIONS */
+
+const INFO_TEXT = {
+
+  confidence: {
+    title: "🛡️ Understanding Confidence",
+    content: `
+      <p>
+        Confidence describes the amount and consistency
+        of statistical information supporting a projection.
+      </p>
+
+      <p>
+        🟢 <strong>HIGH</strong><br>
+        Stronger supporting data and relatively consistent
+        player performance.
+      </p>
+
+      <p>
+        🟡 <strong>MEDIUM</strong><br>
+        Adequate supporting data, with some variation.
+      </p>
+
+      <p>
+        🔴 <strong>LOW</strong><br>
+        Limited data or greater statistical uncertainty.
+      </p>
+
+      <p>
+        Weekly Top 20 only includes HIGH- and
+        MEDIUM-confidence opportunities.
+      </p>
+
+      <p>
+        <strong>Important:</strong>
+        Confidence is a data-quality rating,
+        not the probability of winning a bet.
+      </p>
+    `
+  },
+
+  opportunity: {
+    title: "🏆 Opportunity Score Explained",
+    content: `
+      <p>
+        Opportunity Score measures how much a player's
+        projected performance exceeds their season average.
+      </p>
+
+      <p>
+        <strong>Example:</strong><br>
+        Season average: 75 yards<br>
+        Projection: 90 yards<br>
+        Projected improvement: +20%
+      </p>
+
+      <p>
+        The model adds a confidence bonus:
+      </p>
+
+      <p>
+        🟢 HIGH: +5 points<br>
+        🟡 MEDIUM: +2 points<br>
+        🔴 LOW: Excluded
+      </p>
+
+      <p>
+        <strong>Example score:</strong><br>
+        20 + 5 = 25.0
+      </p>
+
+      <p>
+        The percentage component is capped at
+        30 points, making 35 the maximum
+        possible Opportunity Score.
+      </p>
+
+      <p>
+        The score compares the projection with
+        the player's season average, not
+        the sportsbook line.
+      </p>
+
+      <p>
+        <strong>Important:</strong>
+        A score of 25 does not mean a 25%
+        chance of winning.
+      </p>
+    `
+  },
+
+  projection: {
+    title: "📊 How Projections Work",
+    content: `
+      <p>
+        A projection is the model's estimate
+        of a player's next-game performance.
+      </p>
+
+      <p>
+        The dashboard looks at available
+        player statistics, recent production,
+        season performance, and player usage.
+      </p>
+
+      <p>
+        Depending on the player and prop,
+        it also considers targets, receptions,
+        carries, passing attempts, and
+        opposing defensive performance.
+      </p>
+
+      <p>
+        <strong>Example:</strong><br>
+        A receiver averages 70 yards,
+        but has produced more recently.
+        The model may estimate a higher
+        total after evaluating recent
+        usage and the matchup.
+      </p>
+
+      <p>
+        Receiving, RB, QB, and Weekly Top 20
+        projections use different calculations.
+      </p>
+
+      <p>
+        <strong>Important:</strong>
+        Projections are estimates.
+        Injuries, weather, and game situations
+        can change actual results.
+      </p>
+    `
+  },
+
+  defense: {
+    title: "🛡️ Defensive Matchup Explained",
+    content: `
+      <p>
+        Defensive matchup statistics describe
+        how an opposing defense has performed
+        against certain positions or plays.
+      </p>
+
+      <p>
+        A defense allowing more receiving yards
+        than average may be a more favorable
+        matchup for a receiver.
+      </p>
+
+      <p>
+        A defense allowing fewer rushing yards
+        per carry may be a tougher matchup
+        for a running back.
+      </p>
+
+      <p>
+        The dashboard uses available opponent
+        statistics to provide context for
+        its projections.
+      </p>
+
+      <p>
+        <strong>Important:</strong>
+        Past defensive performance does not
+        guarantee future results.
+      </p>
+    `
+  },
+
+  edge: {
+    title: "🎯 Understanding Model Edge",
+    content: `
+      <p>
+        Edge is the difference between your
+        model's projection and the sportsbook
+        or manually entered prop line.
+      </p>
+
+      <p>
+        <strong>Example:</strong><br>
+        Model projection: 92.5 yards<br>
+        Sportsbook line: 80.5 yards<br>
+        Edge: +12.0 yards
+      </p>
+
+      <p>
+        A positive edge means the model
+        projects ABOVE the line.
+      </p>
+
+      <p>
+        A negative edge means the model
+        projects BELOW the line.
+      </p>
+
+      <p>
+        Edge uses the same units as the prop:
+        yards, receptions, attempts,
+        touchdowns, or interceptions.
+      </p>
+
+      <p>
+        <strong>Important:</strong>
+        Edge is not a win probability or
+        guaranteed profit.
+      </p>
+    `
+  }
+
+};
+
+let previousInfoFocus = null;
+
+/* INFORMATION ICON HELPERS */
+
+function infoIcon(type) {
+
+  const button = document.createElement("button");
+
+  button.type = "button";
+  button.className = "info-icon";
+  button.textContent = "i";
+
+  button.setAttribute(
+    "aria-label",
+    "Explain " + INFO_TEXT[type].title
+  );
+
+  button.onclick = event => {
+    event.stopPropagation();
+    openInfo(type);
+  };
+
+  return button;
+}
+
+function openInfo(type) {
+
+  const info = INFO_TEXT[type];
+
+  if (!info) return;
+
+  previousInfoFocus = document.activeElement;
+
+  $("infoTitle").textContent = info.title;
+  $("infoContent").innerHTML = info.content;
+
+  $("infoModal").hidden = false;
+
+  document.body.classList.add("info-open");
+
+  $("infoModal")
+    .querySelector(".info-close")
+    .focus();
+}
+
+function closeInfo() {
+
+  $("infoModal").hidden = true;
+
+  document.body.classList.remove("info-open");
+
+  if (previousInfoFocus?.isConnected) {
+    previousInfoFocus.focus();
+  }
+}
+
+$("infoModal").addEventListener("click", event => {
+
+  if (event.target === $("infoModal")) {
+    closeInfo();
+  }
+
+});
+
+document.addEventListener("keydown", event => {
+
+  if (
+    event.key === "Escape" &&
+    !$("infoModal").hidden
+  ) {
+    closeInfo();
+  }
+
+});
+
+/* ADD ONE ICON TO A SPECIFIC HEADING */
+
+function addHeadingInfo(id, type) {
+
+  const target = $(id);
+
+  if (target) {
+    target.append(infoIcon(type));
+  }
+}
 
 /* TAB NAVIGATION */
 
@@ -734,6 +1139,37 @@ function metric(label, value) {
   const number = document.createElement("div");
   number.className = "value";
   number.textContent = value ?? "—";
+
+  /*
+    Edge is embedded in comparison text.
+    Place its icon beside the existing Edge line,
+    without adding another row or card.
+  */
+
+  const text = String(value ?? "");
+
+  if (text.includes("Edge:")) {
+
+    number.replaceChildren();
+
+    const lines = text.split("\n");
+
+    lines.forEach((line, index) => {
+
+      if (index > 0) {
+        number.append(document.createElement("br"));
+      }
+
+      const lineSpan = document.createElement("span");
+      lineSpan.textContent = line;
+
+      number.append(lineSpan);
+
+      if (line.startsWith("Edge:")) {
+        number.append(infoIcon("edge"));
+      }
+    });
+  }
 
   box.append(title, number);
 
@@ -992,8 +1428,22 @@ function quickRead(id, data, projection, lineInput) {
     "Model lean only — not a win probability."
   );
 
-  $(id).textContent = parts.join("\n");
-  $(id).style.whiteSpace = "pre-line";
+  const target = $(id);
+  target.replaceChildren();
+
+  parts.forEach((part, index) => {
+
+    if (index > 0) {
+      target.append(document.createElement("br"));
+    }
+
+    target.append(document.createTextNode(part));
+
+    if (part.includes("Edge:")) {
+      target.append(infoIcon("edge"));
+    }
+  });
+
 }
 
 /* RECEIVING PROJECTION */
@@ -1956,16 +2406,38 @@ async function loadWeekly() {
       const body = document.createElement("p");
       body.style.whiteSpace = "pre-line";
 
-      body.textContent =
+      const propLine = document.createElement("span");
+      propLine.textContent =
         String(player.prop || "")
           .replaceAll("_", " ")
           .toUpperCase() +
         " | Projected: " + player.projection +
-        " | Season avg: " + player.season_average +
-        "\nOpportunity score: " + player.score +
-        " | Data confidence: " + player.confidence +
-        "\nWhy: " +
+        " | Season avg: " + player.season_average;
+
+      const scoreLine = document.createElement("span");
+      scoreLine.textContent =
+        "Opportunity score: " + player.score;
+      scoreLine.append(infoIcon("opportunity"));
+
+      const confidenceLine = document.createElement("span");
+      confidenceLine.textContent =
+        "Data confidence: " + player.confidence;
+      confidenceLine.append(infoIcon("confidence"));
+
+      const reasonLine = document.createElement("span");
+      reasonLine.textContent =
+        "Why: " +
         (player.reasons || []).join(" · ");
+
+      body.append(
+        propLine,
+        document.createElement("br"),
+        scoreLine,
+        document.createTextNode(" | "),
+        confidenceLine,
+        document.createElement("br"),
+        reasonLine
+      );
 
       const button = document.createElement("button");
       button.textContent = "VIEW PLAYER";
@@ -2099,6 +2571,19 @@ for (const id of [
   });
 
 }
+
+/* ADD FIVE ICON TYPES TO EXISTING LOCATIONS */
+
+addHeadingInfo("receivingHeroInfo", "projection");
+addHeadingInfo("rushingHeroInfo", "projection");
+addHeadingInfo("qbHeroInfo", "projection");
+
+addHeadingInfo("receivingDefenseInfo", "defense");
+addHeadingInfo("rbReceivingDefenseInfo", "defense");
+addHeadingInfo("rushingDefenseInfo", "defense");
+addHeadingInfo("qbDefenseInfo", "defense");
+
+addHeadingInfo("qbConfidenceInfo", "confidence");
 
 /* INITIALIZE */
 
