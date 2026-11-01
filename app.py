@@ -560,7 +560,12 @@ def weekly_candidates():
                 relative=(projected/baseline-1)
                 # Penalize unstable and small samples; avoid comparing raw yard and catch counts.
                 quality=confidence(values,defense_games)
-                score=round(max(-30,min(30,relative*100))+(5 if quality=='HIGH' else 2 if quality=='MEDIUM' else -3),1)
+
+                if quality=='LOW':
+
+                    continue
+
+                score=round(max(-30,min(30,relative*100))+(5 if quality=='HIGH' else 2),1)
                 if score<=5 or abs(projected-baseline)<max(.5,baseline*.08):continue
                 reasons=[]
                 if t['last_3']>baseline*1.08:reasons.append('Recent production above season average')
