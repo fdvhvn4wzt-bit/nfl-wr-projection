@@ -4,299 +4,649 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>NFL Player Prop Dashboard</title>
+
 <style>
-:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif}
-*{box-sizing:border-box}
-body{background:#0b1220;color:#f5f7fb;max-width:880px;margin:auto;padding:18px}
-p,.small{color:#afbdd1;line-height:1.5}
-.card{background:#172235;border:1px solid #34445d;border-radius:16px;padding:18px;margin:16px 0}
-h1{font-size:28px}
-h2{font-size:20px}
-label{display:block;margin:14px 0 6px;color:#d9e2ef}
-select,input{width:100%;padding:14px;background:#0d1728;border:1px solid #50617a;border-radius:10px;color:white;font-size:16px}
-button{background:#3b82f6;color:white;border:0;border-radius:11px;padding:15px;font-weight:700;font-size:15px;width:100%;margin-top:13px}
-button:disabled{opacity:.5}
-.tabs,.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
-.tabs button{background:#26364e;padding:12px 4px;font-size:12px}
-.tabs .active{background:#3b82f6}
-.metric{background:#0d1728;border-radius:11px;padding:13px;min-width:0}
-.label{font-size:12px;color:#aebbd0}
-.value{font-size:22px;font-weight:750;margin-top:6px;overflow-wrap:anywhere;white-space:pre-line}
-.hero{text-align:center;background:linear-gradient(135deg,#1d3556,#172235)}
-.big{font-size:40px;font-weight:800;margin:10px}
-.error{color:#ffaaaa;white-space:pre-wrap}
-.good{color:#86efac}
-.section{border-bottom:1px solid #34445d;padding-bottom:8px;margin-top:22px}
-[hidden]{display:none!important}
-.confidence-badge{display:inline-block;border-radius:9px;padding:7px 12px;margin:7px;font-weight:750;background:#28364c}
-.confidence-badge.high{color:#86efac}
-.confidence-badge.medium{color:#fde68a}
-.confidence-badge.low{color:#fca5a5}
-@media(max-width:450px){
-body{padding:12px}
-.value{font-size:19px}
-.big{font-size:33px}
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #0b1220;
+  color: #f5f7fb;
+  max-width: 880px;
+  margin: auto;
+  padding: 18px;
+}
+
+p, .small {
+  color: #afbdd1;
+  line-height: 1.5;
+}
+
+.card {
+  background: #172235;
+  border: 1px solid #34445d;
+  border-radius: 16px;
+  padding: 18px;
+  margin: 16px 0;
+}
+
+h1 {
+  font-size: 28px;
+}
+
+h2 {
+  font-size: 20px;
+}
+
+label {
+  display: block;
+  margin: 14px 0 6px;
+  color: #d9e2ef;
+}
+
+select, input {
+  width: 100%;
+  padding: 14px;
+  background: #0d1728;
+  border: 1px solid #50617a;
+  border-radius: 10px;
+  color: white;
+  font-size: 16px;
+}
+
+button {
+  background: #3b82f6;
+  color: white;
+  border: 0;
+  border-radius: 11px;
+  padding: 15px;
+  font-weight: 700;
+  font-size: 15px;
+  width: 100%;
+  margin-top: 13px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+.tabs, .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tabs button {
+  background: #26364e;
+  padding: 12px 3px;
+  font-size: 11px;
+}
+
+.tabs .active {
+  background: #3b82f6;
+}
+
+.metric {
+  background: #0d1728;
+  border-radius: 11px;
+  padding: 13px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 12px;
+  color: #aebbd0;
+}
+
+.value {
+  font-size: 22px;
+  font-weight: 750;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.hero {
+  text-align: center;
+  background: linear-gradient(135deg, #1d3556, #172235);
+}
+
+.big {
+  font-size: 40px;
+  font-weight: 800;
+  margin: 10px;
+}
+
+.error {
+  color: #ffaaaa;
+  white-space: pre-wrap;
+}
+
+.good {
+  color: #86efac;
+}
+
+.section {
+  border-bottom: 1px solid #34445d;
+  padding-bottom: 8px;
+  margin-top: 22px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.confidence-badge {
+  display: inline-block;
+  border-radius: 9px;
+  padding: 7px 12px;
+  margin: 7px;
+  font-weight: 750;
+  background: #28364c;
+}
+
+.confidence-badge.high {
+  color: #86efac;
+}
+
+.confidence-badge.medium {
+  color: #fde68a;
+}
+
+.confidence-badge.low {
+  color: #fca5a5;
+}
+
+@media(max-width:450px) {
+  body {
+    padding: 12px;
+  }
+
+  .value {
+    font-size: 19px;
+  }
+
+  .big {
+    font-size: 33px;
+  }
 }
 </style>
 </head>
+
 <body>
 
 <header>
-<div id="connection" class="small">CONNECTING TO NFL DATA...</div>
-<h1>🏈 NFL Player Prop Projections</h1>
-<p>Postgame statistics, receiving and rushing projections, and DraftKings comparisons.</p>
+  <div id="connection" class="small">
+    CONNECTING TO NFL DATA...
+  </div>
+
+  <h1>🏈 NFL Player Prop Projections</h1>
+
+  <p>
+    Postgame statistics, receiving and rushing projections,
+    and DraftKings comparisons.
+  </p>
 </header>
 
 <div class="tabs">
-<button class="active" id="receivingTab" onclick="showPanel('receiving')">RECEIVING PROPS</button>
-<button id="rushingTab" onclick="showPanel('rushing')">RB PROPS</button>
-<button id="qbTab" onclick="showPanel('qb')">QB PROPS</button>
+  <button
+    class="active"
+    id="receivingTab"
+    onclick="showPanel('receiving')">
+    RECEIVING PROPS
+  </button>
+
+  <button
+    id="rushingTab"
+    onclick="showPanel('rushing')">
+    RB PROPS
+  </button>
+
+  <button
+    id="qbTab"
+    onclick="showPanel('qb')">
+    QB PROPS
+  </button>
+
+  <button
+    id="weeklyTab"
+    onclick="showPanel('weekly')">
+    WEEKLY TOP 20
+  </button>
 </div>
 
-<div class="card">
-<h2>1. Select Matchup</h2>
-<label>Offense Team</label>
-<select id="offense"></select>
-<label>Opposing Defense</label>
-<select id="defense"></select>
+<!-- MATCHUP SELECTOR: HIDDEN ON WEEKLY TAB -->
+
+<div class="card" id="matchupSelector">
+  <h2>1. Select Matchup</h2>
+
+  <label>Offense Team</label>
+  <select id="offense"></select>
+
+  <label>Opposing Defense</label>
+  <select id="defense"></select>
 </div>
 
-<!-- EXISTING WR / TE RECEIVING SECTION -->
+<!-- RECEIVING TAB -->
 
 <section id="receivingPanel">
-<div class="card">
-<h2>2. Receiving Player</h2>
-<label>Quarterback</label>
-<select id="qb" disabled></select>
-<label>Wide Receiver / Tight End</label>
-<select id="receiver" disabled></select>
-</div>
 
-<div class="card">
-<h2>3. Enter Your Own Prop Lines</h2>
-<label>Receiving Yards Line (optional)</label>
-<input type="number" min="0" step="0.5" id="line" placeholder="67.5">
-<label>Receptions Line (optional)</label>
-<input type="number" min="0" step="0.5" id="receptionsLine" placeholder="5.5">
-<button id="calculate" onclick="runProjection()">GENERATE RECEIVING PROJECTION</button>
-<div id="error" class="error"></div>
-</div>
+  <div class="card">
+    <h2>2. Receiving Player</h2>
 
-<div id="results" hidden>
-<div class="card hero">
-<div class="small">IMPROVED RECEIVING YARDS PROJECTION</div>
-<div id="improved" class="big"></div>
-<div id="matchup"></div>
-<div id="receivingConfidence"></div>
-</div>
+    <label>Quarterback</label>
+    <select id="qb" disabled></select>
 
-<div class="card">
-<h2>⚡ Quick Read</h2>
-<div id="receivingQuick" class="small"></div>
-</div>
+    <label>Wide Receiver / Tight End</label>
+    <select id="receiver" disabled></select>
+  </div>
 
-<div class="card">
-<h2>Projection Comparison</h2>
-<div class="grid">
-<div class="metric">
-<div class="label">Original Formula</div>
-<div class="value" id="original"></div>
-</div>
-<div class="metric">
-<div class="label">Improved Formula</div>
-<div class="value" id="improved2"></div>
-</div>
-</div>
-<p class="small">
-Original: projected targets × opponent passing yards per completion.
-Improved: recent production and expected receptions, adjusted conservatively for usage trends and WR/TE defensive matchups.
-</p>
+  <div class="card">
+    <h2>3. Enter Your Own Prop Lines</h2>
 
-<h2 class="section">Quarterback Statistics</h2>
-<div class="grid" id="qbMetrics"></div>
+    <label>Receiving Yards Line (optional)</label>
+    <input
+      type="number"
+      min="0"
+      step="0.5"
+      id="line"
+      placeholder="67.5">
 
-<h2 class="section">Receiver Statistics</h2>
-<div class="grid" id="receiverMetrics"></div>
+    <label>Receptions Line (optional)</label>
+    <input
+      type="number"
+      min="0"
+      step="0.5"
+      id="receptionsLine"
+      placeholder="5.5">
 
-<h2 class="section">Opposing Defense</h2>
-<div class="grid" id="receivingDefenseMetrics"></div>
-<p class="small" id="samples"></p>
-</div>
+    <button id="calculate" onclick="runProjection()">
+      GENERATE RECEIVING PROJECTION
+    </button>
 
-<div class="card" id="sportsbookResult" hidden>
-<h2>Your Prop Line Comparison</h2>
-<div class="grid" id="receivingManual"></div>
-</div>
+    <div id="error" class="error"></div>
+  </div>
 
-<div class="card">
-<h2>Live DraftKings</h2>
-<button id="liveReceiving" onclick="getLive('receiving')">FETCH LIVE RECEIVING PROPS</button>
-<p id="receivingStatus" class="small">Fetch after generating a projection.</p>
-<div class="grid" id="receivingLive"></div>
-</div>
-</div>
+  <div id="results" hidden>
+
+    <div class="card hero">
+      <div class="small">
+        IMPROVED RECEIVING YARDS PROJECTION
+      </div>
+
+      <div id="improved" class="big"></div>
+      <div id="matchup"></div>
+      <div id="receivingConfidence"></div>
+    </div>
+
+    <div class="card">
+      <h2>⚡ Quick Read</h2>
+      <div id="receivingQuick" class="small"></div>
+    </div>
+
+    <div class="card">
+      <h2>Projection Comparison</h2>
+
+      <div class="grid">
+        <div class="metric">
+          <div class="label">Original Formula</div>
+          <div class="value" id="original"></div>
+        </div>
+
+        <div class="metric">
+          <div class="label">Improved Formula</div>
+          <div class="value" id="improved2"></div>
+        </div>
+      </div>
+
+      <p class="small">
+        Original: projected targets × opponent passing yards
+        per completion. Improved: recent production and expected
+        receptions, adjusted conservatively for usage trends
+        and WR/TE defensive matchups.
+      </p>
+
+      <h2 class="section">Quarterback Statistics</h2>
+      <div class="grid" id="qbMetrics"></div>
+
+      <h2 class="section">Receiver Statistics</h2>
+      <div class="grid" id="receiverMetrics"></div>
+
+      <h2 class="section">Opposing Defense</h2>
+      <div class="grid" id="receivingDefenseMetrics"></div>
+
+      <p class="small" id="samples"></p>
+    </div>
+
+    <div class="card" id="sportsbookResult" hidden>
+      <h2>Your Prop Line Comparison</h2>
+      <div class="grid" id="receivingManual"></div>
+    </div>
+
+    <div class="card">
+      <h2>Live DraftKings</h2>
+
+      <button
+        id="liveReceiving"
+        onclick="getLive('receiving')">
+        FETCH LIVE RECEIVING PROPS
+      </button>
+
+      <p id="receivingStatus" class="small">
+        Fetch after generating a projection.
+      </p>
+
+      <div class="grid" id="receivingLive"></div>
+    </div>
+
+  </div>
 </section>
 
-<!-- EXISTING FOUR-PROP RUNNING BACK SECTION -->
+<!-- RUNNING BACK TAB -->
 
 <section id="rushingPanel" hidden>
-<div class="card">
-<h2>2. Running Back</h2>
-<label>Running Back</label>
-<select id="runningBack" disabled></select>
-</div>
 
-<div class="card">
-<h2>3. Enter Your Own Prop Lines</h2>
-<label>Rushing Yards Line (optional)</label>
-<input type="number" min="0" step="0.5" id="rushYardsLine">
-<label>Rushing Attempts Line (optional)</label>
-<input type="number" min="0" step="0.5" id="rushAttemptsLine">
-<label>RB Receiving Yards Line (optional)</label>
-<input type="number" min="0" step="0.5" id="rbReceivingYardsLine">
-<label>RB Receptions Line (optional)</label>
-<input type="number" min="0" step="0.5" id="rbReceptionsLine">
-<button id="rushCalculate" onclick="runRushingProjection()">GENERATE ALL FOUR RB PROJECTIONS</button>
-<div id="rushError" class="error"></div>
-</div>
+  <div class="card">
+    <h2>2. Running Back</h2>
 
-<div id="rushResults" hidden>
-<div class="card hero">
-<div class="small">IMPROVED RUSHING YARDS PROJECTION</div>
-<div id="rushProjectedYards" class="big"></div>
-<div id="rushMatchup"></div>
-<div id="rushingConfidence"></div>
-</div>
+    <label>Running Back</label>
+    <select id="runningBack" disabled></select>
+  </div>
 
-<div class="card">
-<h2>⚡ Quick Read</h2>
-<div id="rushingQuick" class="small"></div>
-</div>
+  <div class="card">
+    <h2>3. Enter Your Own Prop Lines</h2>
 
-<div class="card">
-<h2>🏈 All Four RB Props — Quick Comparison</h2>
-<div class="grid" id="rbFourQuick"></div>
-<p class="small">
-DraftKings lines appear after tapping Fetch; manual lines are used when a DraftKings line is unavailable.
-</p>
-</div>
+    <label>Rushing Yards Line (optional)</label>
+    <input
+      type="number"
+      min="0"
+      step="0.5"
+      id="rushYardsLine">
 
-<div class="card">
-<h2>RB Receiving Projections</h2>
-<div class="grid" id="rbReceivingMetrics"></div>
-<h2 class="section">Opponent Defense vs RB Receiving</h2>
-<div class="grid" id="rbReceivingDefense"></div>
-<p class="small" id="rbReceivingNotes"></p>
-</div>
+    <label>Rushing Attempts Line (optional)</label>
+    <input
+      type="number"
+      min="0"
+      step="0.5"
+      id="rushAttemptsLine">
 
-<div class="card">
-<h2>Running Back Projection</h2>
-<div class="grid" id="rushMetrics"></div>
-<h2 class="section">Opposing Run Defense</h2>
-<div class="grid" id="rushDefenseMetrics"></div>
-<p class="small" id="rushSamples"></p>
-<p class="small">
-Improved: projected attempts × opponent yards allowed per carry, with conservative workload and RB defensive adjustments.
-Original blended formula shown for comparison.
-</p>
-</div>
+    <label>RB Receiving Yards Line (optional)</label>
+    <input
+      type="number"
+      min="0"
+      step="0.5"
+      id="rbReceivingYardsLine">
 
-<div class="card" id="rushBookResults" hidden>
-<h2>Your Prop Line Comparison</h2>
-<div class="grid" id="rushingManual"></div>
-</div>
+    <label>RB Receptions Line (optional)</label>
+    <input
+      type="number"
+      min="0"
+      step="0.5"
+      id="rbReceptionsLine">
 
-<div class="card">
-<h2>Live DraftKings</h2>
-<button id="liveRushing" onclick="getLive('rushing')">FETCH ALL FOUR RB PROPS</button>
-<p id="rushingStatus" class="small">Fetch after generating a projection.</p>
-<div class="grid" id="rushingLive"></div>
-</div>
-</div>
+    <button
+      id="rushCalculate"
+      onclick="runRushingProjection()">
+      GENERATE ALL FOUR RB PROJECTIONS
+    </button>
+
+    <div id="rushError" class="error"></div>
+  </div>
+
+  <div id="rushResults" hidden>
+
+    <div class="card hero">
+      <div class="small">
+        IMPROVED RUSHING YARDS PROJECTION
+      </div>
+
+      <div id="rushProjectedYards" class="big"></div>
+      <div id="rushMatchup"></div>
+      <div id="rushingConfidence"></div>
+    </div>
+
+    <div class="card">
+      <h2>⚡ Quick Read</h2>
+      <div id="rushingQuick" class="small"></div>
+    </div>
+
+    <div class="card">
+      <h2>🏈 All Four RB Props — Quick Comparison</h2>
+
+      <div class="grid" id="rbFourQuick"></div>
+
+      <p class="small">
+        DraftKings lines appear after tapping Fetch;
+        manual lines are used when a DraftKings line
+        is unavailable.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>RB Receiving Projections</h2>
+
+      <div class="grid" id="rbReceivingMetrics"></div>
+
+      <h2 class="section">
+        Opponent Defense vs RB Receiving
+      </h2>
+
+      <div class="grid" id="rbReceivingDefense"></div>
+
+      <p class="small" id="rbReceivingNotes"></p>
+    </div>
+
+    <div class="card">
+      <h2>Running Back Projection</h2>
+
+      <div class="grid" id="rushMetrics"></div>
+
+      <h2 class="section">Opposing Run Defense</h2>
+
+      <div class="grid" id="rushDefenseMetrics"></div>
+
+      <p class="small" id="rushSamples"></p>
+
+      <p class="small">
+        Improved: projected attempts × opponent yards
+        allowed per carry, with conservative workload
+        and RB defensive adjustments.
+        Original blended formula shown for comparison.
+      </p>
+    </div>
+
+    <div class="card" id="rushBookResults" hidden>
+      <h2>Your Prop Line Comparison</h2>
+      <div class="grid" id="rushingManual"></div>
+    </div>
+
+    <div class="card">
+      <h2>Live DraftKings</h2>
+
+      <button
+        id="liveRushing"
+        onclick="getLive('rushing')">
+        FETCH ALL FOUR RB PROPS
+      </button>
+
+      <p id="rushingStatus" class="small">
+        Fetch after generating a projection.
+      </p>
+
+      <div class="grid" id="rushingLive"></div>
+    </div>
+
+  </div>
 </section>
 
-<!-- NEW SEVEN-PROP QUARTERBACK SECTION -->
+<!-- QUARTERBACK TAB -->
 
 <section id="qbPanel" hidden>
 
-<div class="card">
-<h2>2. Quarterback</h2>
-<label>Quarterback</label>
-<select id="qbPlayer" disabled></select>
-</div>
+  <div class="card">
+    <h2>2. Quarterback</h2>
 
-<div class="card">
-<h2>3. Optional QB Prop Lines</h2>
-<div class="grid" id="qbLineInputs"></div>
-<button id="qbCalculate" onclick="runQbProjection()">
-GENERATE ALL SEVEN QB PROJECTIONS
-</button>
-<div id="qbError" class="error"></div>
-</div>
+    <label>Quarterback</label>
+    <select id="qbPlayer" disabled></select>
+  </div>
 
-<div id="qbResults" hidden>
+  <div class="card">
+    <h2>3. Optional QB Prop Lines</h2>
 
-<div class="card hero">
-<div class="small">PROJECTED PASSING YARDS</div>
-<div class="big" id="qbHero"></div>
-<div id="qbMatchup"></div>
-</div>
+    <div class="grid" id="qbLineInputs"></div>
 
-<div class="card">
-<h2>⚡ All Seven QB Props — Quick Comparison</h2>
-<div class="grid" id="qbQuick"></div>
-<p class="small">
-DraftKings lines appear after Fetch. Manual lines are used when DraftKings lines are unavailable.
-Model edge is not a win probability.
-</p>
-</div>
+    <button
+      id="qbCalculate"
+      onclick="runQbProjection()">
+      GENERATE ALL SEVEN QB PROJECTIONS
+    </button>
 
-<div class="card">
-<h2>QB Recent Form</h2>
-<div class="grid" id="qbRecent"></div>
+    <div id="qbError" class="error"></div>
+  </div>
 
-<h2 class="section">Opponent Defense vs Quarterbacks</h2>
-<div class="grid" id="qbDefense"></div>
-<p class="small" id="qbSamples"></p>
+  <div id="qbResults" hidden>
 
-<h2 class="section">Data Confidence</h2>
-<div id="qbConfidence"></div>
-<p class="small">
-Passing TDs and interceptions are especially variable.
-Confidence is a data-quality label, not a betting win probability.
-</p>
-</div>
+    <div class="card hero">
+      <div class="small">PROJECTED PASSING YARDS</div>
+      <div class="big" id="qbHero"></div>
+      <div id="qbMatchup"></div>
+    </div>
 
-<div class="card">
-<h2>Live DraftKings</h2>
-<button id="liveQb" onclick="getQbLive()">FETCH SEVEN QB PROPS</button>
-<p id="qbStatus" class="small">Fetch after generating a projection.</p>
-<div class="grid" id="qbLive"></div>
-</div>
+    <div class="card">
+      <h2>⚡ All Seven QB Props — Quick Comparison</h2>
 
-</div>
+      <div class="grid" id="qbQuick"></div>
+
+      <p class="small">
+        DraftKings lines appear after Fetch.
+        Manual lines are used when DraftKings lines
+        are unavailable.
+        Model edge is not a win probability.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>QB Recent Form</h2>
+
+      <div class="grid" id="qbRecent"></div>
+
+      <h2 class="section">
+        Opponent Defense vs Quarterbacks
+      </h2>
+
+      <div class="grid" id="qbDefense"></div>
+
+      <p class="small" id="qbSamples"></p>
+
+      <h2 class="section">Data Confidence</h2>
+
+      <div id="qbConfidence"></div>
+
+      <p class="small">
+        Passing TDs and interceptions are especially variable.
+        Confidence is a data-quality label,
+        not a betting win probability.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Live DraftKings</h2>
+
+      <button id="liveQb" onclick="getQbLive()">
+        FETCH SEVEN QB PROPS
+      </button>
+
+      <p id="qbStatus" class="small">
+        Fetch after generating a projection.
+      </p>
+
+      <div class="grid" id="qbLive"></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- WEEKLY TOP 20 TAB -->
+
+<section id="weeklyPanel" hidden>
+
+  <div class="card">
+
+    <h2>🏆 Weekly Top 20 Statistical Opportunities</h2>
+
+    <p class="small">
+      Weekly NFL statistical rankings using recent player
+      performance, season averages, and defensive matchups.
+      No DraftKings requests or Odds API credits.
+    </p>
+
+    <p id="weeklyStatus" class="small">
+      Open this tab to load the weekly list.
+    </p>
+
+    <p class="small" style="color:#fde68a">
+      ⚠️ Injury status is not verified.
+      Check official game-day availability before using
+      any projection.
+    </p>
+
+    <div id="weeklyCards"></div>
+
+  </div>
 </section>
 
 <!-- CONFIDENCE GUIDE -->
 
 <div class="card">
-<h2>📊 Confidence Rating Guide</h2>
-<p>🟢 <strong>HIGH</strong> — Stronger statistical support and relatively consistent performance.</p>
-<p>🟡 <strong>MEDIUM</strong> — Moderate statistical support, with some variation.</p>
-<p>🔴 <strong>LOW</strong> — Greater uncertainty from limited data or inconsistent performance.</p>
-<p class="small">Confidence is not a probability of winning a bet.</p>
+  <h2>📊 Confidence Rating Guide</h2>
+
+  <p>
+    🟢 <strong>HIGH</strong> —
+    Stronger statistical support and relatively
+    consistent performance.
+  </p>
+
+  <p>
+    🟡 <strong>MEDIUM</strong> —
+    Moderate statistical support,
+    with some variation.
+  </p>
+
+  <p>
+    🔴 <strong>LOW</strong> —
+    Greater uncertainty from limited data
+    or inconsistent performance.
+  </p>
+
+  <p class="small">
+    Confidence is not a probability of winning a bet.
+  </p>
 </div>
 
 <footer class="small">
-NFL statistics via nflverse (postgame).
-Live lines require an Odds API key and may not be available for every matchup or player.
-Projections do not automatically account for injuries, weather, or game script.
-Confidence labels reflect sample size and consistency, not win probabilities.
-Edges are model differences, not probabilities.
+  NFL statistics via nflverse (postgame).
+  Live lines require an Odds API key and may not
+  be available for every matchup or player.
+  Projections do not automatically account for
+  injuries, weather, or game script.
+  Confidence labels reflect sample size and consistency,
+  not win probabilities.
+  Edges are model differences, not probabilities.
 </footer>
 
 <script>
+
 const $ = id => document.getElementById(id);
 
 let projections = {
@@ -307,22 +657,39 @@ let projections = {
 let rbDraftKings = {};
 let qbProjection = null;
 let qbDraftKings = {};
+let weeklyLoaded = false;
+
+/* TAB NAVIGATION */
 
 function showPanel(panel) {
+
+  // Hide matchup selection ONLY for Weekly Top 20.
+  $("matchupSelector").hidden = panel === "weekly";
+
   const receiving = panel === "receiving";
   const rushing = panel === "rushing";
   const qb = panel === "qb";
+  const weekly = panel === "weekly";
 
   $("receivingPanel").hidden = !receiving;
   $("rushingPanel").hidden = !rushing;
   $("qbPanel").hidden = !qb;
+  $("weeklyPanel").hidden = !weekly;
 
   $("receivingTab").classList.toggle("active", receiving);
   $("rushingTab").classList.toggle("active", rushing);
   $("qbTab").classList.toggle("active", qb);
+  $("weeklyTab").classList.toggle("active", weekly);
+
+  if (weekly) {
+    loadWeekly();
+  }
 }
 
+/* CONFIDENCE DISPLAY */
+
 function confidenceBadge(value, label) {
+
   const element = document.createElement("span");
 
   const level = ["HIGH", "MEDIUM", "LOW"].includes(value)
@@ -345,6 +712,7 @@ function confidenceBadge(value, label) {
 }
 
 function showConfidence(id, entries) {
+
   $(id).replaceChildren(
     ...entries.map(([label, value]) =>
       confidenceBadge(value, label)
@@ -352,7 +720,10 @@ function showConfidence(id, entries) {
   );
 }
 
+/* METRICS */
+
 function metric(label, value) {
+
   const box = document.createElement("div");
   box.className = "metric";
 
@@ -365,16 +736,21 @@ function metric(label, value) {
   number.textContent = value ?? "—";
 
   box.append(title, number);
+
   return box;
 }
 
 function metrics(id, items) {
+
   $(id).replaceChildren(
     ...items.map(item => metric(item[0], item[1]))
   );
 }
 
+/* LINE COMPARISON */
+
 function comparison(projected, entry, unit) {
+
   if (
     !entry ||
     entry.line === null ||
@@ -403,7 +779,10 @@ function comparison(projected, entry, unit) {
   return text;
 }
 
+/* API HELPER */
+
 async function jsonFetch(url) {
+
   const response = await fetch(url);
   const data = await response.json();
 
@@ -418,11 +797,16 @@ async function jsonFetch(url) {
   return data;
 }
 
+/* TEAM DROPDOWNS */
+
 async function loadTeams() {
+
   try {
+
     const teams = await jsonFetch("/api/teams");
 
     for (const id of ["offense", "defense"]) {
+
       const select = $(id);
 
       select.replaceChildren(
@@ -443,18 +827,25 @@ async function loadTeams() {
       "NFL DATA CONNECTION READY";
 
   } catch (error) {
+
     $("connection").textContent = error.message;
+
   }
 }
 
+/* PLAYER ROSTERS */
+
 async function loadRoster() {
+
   for (const id of [
     "qb",
     "receiver",
     "runningBack",
     "qbPlayer"
   ]) {
+
     $(id).disabled = true;
+
     $(id).replaceChildren(
       new Option("Select offense team first", "")
     );
@@ -465,6 +856,7 @@ async function loadRoster() {
   }
 
   try {
+
     const roster = await jsonFetch(
       "/api/roster?team=" +
       encodeURIComponent($("offense").value)
@@ -478,6 +870,7 @@ async function loadRoster() {
     ];
 
     for (const [id, key] of groups) {
+
       const select = $(id);
 
       select.replaceChildren(
@@ -494,13 +887,18 @@ async function loadRoster() {
     }
 
   } catch (error) {
+
     $("error").textContent = error.message;
     $("rushError").textContent = error.message;
     $("qbError").textContent = error.message;
+
   }
 }
 
+/* VALIDATION */
+
 function checkMatchup(player) {
+
   if (
     !$("offense").value ||
     !$("defense").value ||
@@ -519,6 +917,7 @@ function checkMatchup(player) {
 }
 
 function addLine(params, inputId, parameterName) {
+
   const value = $(inputId).value;
 
   if (value === "") {
@@ -535,10 +934,23 @@ function addLine(params, inputId, parameterName) {
   }
 
   params.set(parameterName, value);
+
   return true;
 }
 
+function manualLine(id) {
+
+  const value = $(id).value;
+
+  return value === ""
+    ? null
+    : {line: Number(value)};
+}
+
+/* QUICK READ */
+
 function quickRead(id, data, projection, lineInput) {
+
   const line = $(lineInput).value;
 
   const parts = [
@@ -549,6 +961,7 @@ function quickRead(id, data, projection, lineInput) {
     line !== "" &&
     Number.isFinite(Number(line))
   ) {
+
     const edge =
       Number(projection) - Number(line);
 
@@ -565,6 +978,7 @@ function quickRead(id, data, projection, lineInput) {
     );
 
   } else {
+
     parts.push(
       "Enter a manual line or fetch DraftKings to compare."
     );
@@ -582,9 +996,10 @@ function quickRead(id, data, projection, lineInput) {
   $(id).style.whiteSpace = "pre-line";
 }
 
-// WR / TE RECEIVING PROJECTIONS
+/* RECEIVING PROJECTION */
 
 async function runProjection() {
+
   const button = $("calculate");
 
   $("error").textContent = "";
@@ -592,6 +1007,7 @@ async function runProjection() {
   button.disabled = true;
 
   try {
+
     checkMatchup($("receiver").value);
 
     if (!$("qb").value) {
@@ -606,14 +1022,19 @@ async function runProjection() {
     });
 
     const hasYards = addLine(
-      params, "line", "line"
+      params,
+      "line",
+      "line"
     );
 
     const hasReceptions = addLine(
-      params, "receptionsLine", "receptions_line"
+      params,
+      "receptionsLine",
+      "receptions_line"
     );
 
-    const hasManualLine = hasYards || hasReceptions;
+    const hasManualLine =
+      hasYards || hasReceptions;
 
     const data = await jsonFetch(
       "/api/project?" + params.toString()
@@ -665,8 +1086,14 @@ async function runProjection() {
     ]);
 
     metrics("receiverMetrics", [
-      ["Target Share", data.target_share + "%"],
-      ["Catch Rate", data.catch_rate + "%"],
+      [
+        "Target Share",
+        data.target_share + "%"
+      ],
+      [
+        "Catch Rate",
+        data.catch_rate + "%"
+      ],
       [
         "Recent Receiving Yards",
         data.receiver_recent_yards_average
@@ -697,6 +1124,7 @@ async function runProjection() {
     $("sportsbookResult").hidden = !hasManualLine;
 
     if (hasManualLine) {
+
       metrics("receivingManual", [
         [
           "Receiving Yards",
@@ -724,24 +1152,20 @@ async function runProjection() {
     $("results").hidden = false;
 
   } catch (error) {
+
     $("error").textContent = error.message;
 
   } finally {
+
     button.disabled = false;
+
   }
 }
 
-// FOUR-PROP RUNNING BACK PROJECTIONS
-
-function manualLine(id) {
-  const value = $(id).value;
-
-  return value === ""
-    ? null
-    : {line: Number(value)};
-}
+/* RUNNING BACK QUICK COMPARISON */
 
 function renderRbFour(data) {
+
   const props = [
     [
       "rushing_yards",
@@ -776,8 +1200,11 @@ function renderRbFour(data) {
   metrics(
     "rbFourQuick",
     props.map(([key, label, projection, id, unit]) => {
+
       const draftKings = rbDraftKings[key];
-      const entry = draftKings || manualLine(id);
+
+      const entry =
+        draftKings || manualLine(id);
 
       const source = draftKings
         ? "DraftKings"
@@ -801,7 +1228,10 @@ function renderRbFour(data) {
   );
 }
 
+/* RUNNING BACK PROJECTION */
+
 async function runRushingProjection() {
+
   const button = $("rushCalculate");
 
   $("rushError").textContent = "";
@@ -809,6 +1239,7 @@ async function runRushingProjection() {
   button.disabled = true;
 
   try {
+
     checkMatchup($("runningBack").value);
 
     const params = new URLSearchParams({
@@ -1008,6 +1439,7 @@ async function runRushingProjection() {
     $("rushBookResults").hidden = !hasManualLine;
 
     if (hasManualLine) {
+
       metrics("rushingManual", [
         [
           "Rushing Yards",
@@ -1051,16 +1483,20 @@ async function runRushingProjection() {
     $("rushResults").hidden = false;
 
   } catch (error) {
+
     $("rushError").textContent = error.message;
 
   } finally {
+
     button.disabled = false;
+
   }
 }
 
-// EXISTING DRAFTKINGS RECEIVING / RB ODDS
+/* DRAFTKINGS RECEIVING AND RB */
 
 async function getLive(kind) {
+
   const data = projections[kind];
 
   const button = $(
@@ -1078,10 +1514,12 @@ async function getLive(kind) {
   }
 
   button.disabled = true;
+
   status.textContent =
     "Fetching current sportsbook lines...";
 
   try {
+
     const player = kind === "receiving"
       ? data.receiver
       : data.running_back;
@@ -1149,6 +1587,7 @@ async function getLive(kind) {
     wrapper.append(heading);
 
     for (const [key, label, projection, unit] of props) {
+
       const title = document.createElement("div");
       title.className = "label";
       title.textContent = label;
@@ -1156,7 +1595,8 @@ async function getLive(kind) {
       const result = document.createElement("p");
       result.style.whiteSpace = "pre-line";
 
-      const entry = odds.books?.DraftKings?.[key];
+      const entry =
+        odds.books?.DraftKings?.[key];
 
       result.textContent =
         comparison(projection, entry, unit);
@@ -1164,6 +1604,7 @@ async function getLive(kind) {
       wrapper.append(title, result);
 
       if (entry?.last_update) {
+
         const time = document.createElement("div");
         time.className = "small";
 
@@ -1188,14 +1629,17 @@ async function getLive(kind) {
       new Date(odds.updated_at).toLocaleString();
 
   } catch (error) {
+
     status.textContent = error.message;
 
   } finally {
+
     button.disabled = false;
+
   }
 }
 
-// NEW QB PROPS
+/* QUARTERBACK PROPS */
 
 const QB_PROPS = [
   ["passing_yards", "Passing Yards", "yards"],
@@ -1207,11 +1651,15 @@ const QB_PROPS = [
   ["rushing_attempts", "QB Rushing Attempts", "attempts"]
 ];
 
+/* QB LINE INPUTS */
+
 function setupQbInputs() {
+
   const root = $("qbLineInputs");
   root.replaceChildren();
 
   for (const [key, label] of QB_PROPS) {
+
     const box = document.createElement("div");
 
     const caption = document.createElement("label");
@@ -1233,7 +1681,10 @@ function qbManualLine(key) {
   return manualLine("qbLine_" + key);
 }
 
+/* QB QUICK COMPARISON */
+
 function renderQbQuick() {
+
   if (!qbProjection) {
     return;
   }
@@ -1241,6 +1692,7 @@ function renderQbQuick() {
   metrics(
     "qbQuick",
     QB_PROPS.map(([key, label, unit]) => {
+
       const projected =
         qbProjection.projections[key];
 
@@ -1271,7 +1723,10 @@ function renderQbQuick() {
   );
 }
 
+/* QB PROJECTION */
+
 async function runQbProjection() {
+
   const button = $("qbCalculate");
 
   $("qbError").textContent = "";
@@ -1279,6 +1734,7 @@ async function runQbProjection() {
   button.disabled = true;
 
   try {
+
     checkMatchup($("qbPlayer").value);
 
     const params = new URLSearchParams({
@@ -1314,6 +1770,7 @@ async function runQbProjection() {
     metrics(
       "qbRecent",
       QB_PROPS.map(([key, label]) => {
+
         const form = data.recent_form[key] || {};
 
         return [
@@ -1328,6 +1785,7 @@ async function runQbProjection() {
     metrics(
       "qbDefense",
       QB_PROPS.map(([key, label]) => {
+
         const defenseKey =
           key === "rushing_yards"
             ? "qb_rushing_yards"
@@ -1369,17 +1827,25 @@ async function runQbProjection() {
     $("qbResults").hidden = false;
 
   } catch (error) {
+
     $("qbError").textContent = error.message;
 
   } finally {
+
     button.disabled = false;
+
   }
 }
 
+/* DRAFTKINGS QB ODDS */
+
 async function getQbLive() {
+
   if (!qbProjection) {
+
     $("qbStatus").textContent =
       "Generate a QB projection first.";
+
     return;
   }
 
@@ -1390,6 +1856,7 @@ async function getQbLive() {
     "Fetching DraftKings QB props...";
 
   try {
+
     const data = qbProjection;
 
     const params = new URLSearchParams({
@@ -1425,16 +1892,177 @@ async function getQbLive() {
       new Date(odds.updated_at).toLocaleString();
 
   } catch (error) {
+
     $("qbStatus").textContent = error.message;
 
   } finally {
+
     button.disabled = false;
+
   }
 }
 
-// RESET RESULTS WHEN MATCHUP OR PLAYER CHANGES
+/* WEEKLY TOP 20 */
+
+async function loadWeekly() {
+
+  if (weeklyLoaded) {
+    return;
+  }
+
+  $("weeklyStatus").textContent =
+    "Analyzing upcoming games and player trends…";
+
+  try {
+
+    const data = await jsonFetch("/api/weekly-top20");
+
+    weeklyLoaded = true;
+
+    $("weeklyStatus").textContent =
+      "Generated: " + data.as_of_hst +
+      " | Upcoming games: " + data.games +
+      " | Odds API credits: 0";
+
+    const root = $("weeklyCards");
+    root.replaceChildren();
+
+    if (!data.items || !data.items.length) {
+
+      root.append(
+        document.createTextNode(
+          "No eligible upcoming games or sufficient player statistics found."
+        )
+      );
+
+      return;
+    }
+
+    data.items.forEach((player, index) => {
+
+      const card = document.createElement("div");
+      card.className = "metric";
+      card.style.margin = "12px 0";
+
+      const heading = document.createElement("h3");
+
+      heading.textContent =
+        "#" + (index + 1) +
+        " " + player.player +
+        " (" + player.position + ")" +
+        " — " + player.team +
+        " vs " + player.opponent;
+
+      const body = document.createElement("p");
+      body.style.whiteSpace = "pre-line";
+
+      body.textContent =
+        String(player.prop || "")
+          .replaceAll("_", " ")
+          .toUpperCase() +
+        " | Projected: " + player.projection +
+        " | Season avg: " + player.season_average +
+        "\nOpportunity score: " + player.score +
+        " | Data confidence: " + player.confidence +
+        "\nWhy: " +
+        (player.reasons || []).join(" · ");
+
+      const button = document.createElement("button");
+      button.textContent = "VIEW PLAYER";
+
+      button.onclick = () =>
+        viewWeeklyPlayer(player);
+
+      card.append(heading, body, button);
+
+      root.append(card);
+    });
+
+  } catch (error) {
+
+    $("weeklyStatus").textContent =
+      "Weekly list unavailable: " + error.message;
+
+  }
+}
+
+/* VIEW PLAYER BUTTON */
+
+async function viewWeeklyPlayer(player) {
+
+  $("offense").value = player.team;
+  $("defense").value = player.opponent;
+
+  resetProjections();
+
+  await loadRoster();
+
+  const panel =
+    player.position === "QB"
+      ? "qb"
+      : player.position === "RB"
+        ? "rushing"
+        : "receiving";
+
+  const selectId =
+    panel === "qb"
+      ? "qbPlayer"
+      : panel === "rushing"
+        ? "runningBack"
+        : "receiver";
+
+  const select = $(selectId);
+
+  const matchingOption = [...select.options].find(
+    option =>
+      option.value.toLowerCase() ===
+      String(player.player).toLowerCase()
+  );
+
+  if (!matchingOption) {
+
+    showPanel(panel);
+
+    alert(
+      "Player not found on the current roster. Select manually."
+    );
+
+    return;
+  }
+
+  select.value = matchingOption.value;
+
+  if (panel === "receiving") {
+
+    const qbSelect = $("qb");
+
+    if (qbSelect.options.length > 1) {
+      qbSelect.selectedIndex = 1;
+    }
+  }
+
+  showPanel(panel);
+
+  if (panel === "qb") {
+
+    await runQbProjection();
+
+  } else if (panel === "rushing") {
+
+    await runRushingProjection();
+
+  } else {
+
+    alert(
+      "Select the correct quarterback, then generate the receiving projection."
+    );
+  }
+}
+
+/* RESET PROJECTIONS */
 
 function resetProjections() {
+
   projections = {
     receiving: null,
     rushing: null
@@ -1449,9 +2077,13 @@ function resetProjections() {
   $("qbResults").hidden = true;
 }
 
+/* EVENT LISTENERS */
+
 $("offense").addEventListener("change", () => {
+
   resetProjections();
   loadRoster();
+
 });
 
 for (const id of [
@@ -1461,14 +2093,19 @@ for (const id of [
   "runningBack",
   "qbPlayer"
 ]) {
+
   $(id).addEventListener("change", () => {
     resetProjections();
   });
+
 }
+
+/* INITIALIZE */
 
 setupQbInputs();
 loadTeams();
 
 </script>
+
 </body>
 </html>
