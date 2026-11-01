@@ -455,51 +455,69 @@ def weekly_window():
     return last_sat, now
 
 def weekly_schedule():
+    """Select exactly one NFL schedule week, never a rolling nine-day window."""
     try:
         schedule = nfl.load_schedules(seasons=[season()]).to_pandas()
     except Exception as exc:
-        raise HTTPException(503, f'Unable to load upcoming NFL schedule: {exc}')
+        raise HTTPException(503, f'Unable to load NFL schedule: {exc}')
     hc=column(schedule,['home_team']); ac=column(schedule,['away_team'])
     dc=column(schedule,['gameday','game_date']); tc=column(schedule,['gametime','game_time'])
-    if not all([hc,ac,dc]):raise HTTPException(503,'NFL schedule fields unavailable.')
-    # Prefer actual UTC kickoff when provided; date-only fallback is conservative.
+    wc=column(schedule,['week']); st=column(schedule,['game_type','season_type'])
+    if not all([hc,ac,dc,wc]):
+        raise HTTPException(503,'NFL schedule is missing team, date, or week fields.')
+    schedule=schedule.copy()
+    if st:
+        schedule=schedule[schedule[st].astype(str).str.upper().isin(['REG','REGULAR'])].copy()
+    # nflverse gametime is Eastern local time. Date-only records cannot be
+    # trusted for an accurate upcoming slate, so fail closed instead.
     kickoff=column(schedule,['start_time','game_datetime','kickoff'])
     if kickoff:
         times=pd.to_datetime(schedule[kickoff],errors='coerce',utc=True)
+    elif tc:
+        local=pd.to_datetime(schedule[dc].astype(str)+' '+schedule[tc].astype(str),errors='coerce')
+        times=local.dt.tz_localize('America/New_York',ambiguous='NaT',nonexistent='NaT').dt.tz_convert('UTC')
     else:
-        strings=schedule[dc].astype(str)+' '+(schedule[tc].astype(str) if tc else '23:59')
-        times=pd.to_datetime(strings,errors='coerce',utc=True)
+        raise HTTPException(503,'NFL schedule has no kickoff times; refusing to guess matchups.')
+    schedule['_kickoff']=times
+    schedule['_week']=pd.to_numeric(schedule[wc],errors='coerce')
     now=pd.Timestamp.now(tz='UTC')
-    eligible=schedule[(times>=now)&(times<=now+pd.Timedelta(days=9))].copy()
-    eligible['_kickoff']=times.loc[eligible.index]
-    eligible=eligible.sort_values('_kickoff')
+    upcoming=schedule[(schedule['_kickoff']>now)&schedule['_week'].notna()].copy()
+    if upcoming.empty:return [],0
+    # The nearest unplayed game defines the slate week; include only
+    # games from that exact week that have not started.
+    nearest=upcoming.sort_values('_kickoff').iloc[0]
+    target_week=int(nearest['_week'])
+    selected=upcoming[upcoming['_week']==target_week].sort_values('_kickoff')
     games=[]; seen=set()
-    for _,g in eligible.iterrows():
+    for _,g in selected.iterrows():
         home=str(g[hc]).upper().strip().replace('LA','LAR')
         away=str(g[ac]).upper().strip().replace('LA','LAR')
         if home not in NFL_TEAMS or away not in NFL_TEAMS:continue
-        key=tuple(sorted([home,away]))
-        if key in seen:continue
-        seen.add(key)
+        if home in seen or away in seen:continue
+        seen.update([home,away])
         games.extend([(home,away),(away,home)])
-    return games
+    return games,target_week
 
 def weekly_candidates():
     df=stats(); team_col=column(df,['recent_team','team','team_abbr','posteam'])
     name_col=column(df,['player_display_name','player_name','full_name','display_name','player'])
     pos_col=column(df,['position','player_position']); week_col=column(df,['week'])
     if not all([team_col,name_col,pos_col,week_col]):raise HTTPException(503,'Weekly player statistics fields unavailable.')
-    games=weekly_schedule()
+    games,slate_week=weekly_schedule()
     if not games: return [],0
     candidates=[]
     for team,opponent in games:
         roster=df[df[team_col].astype(str).str.upper().str.strip().isin(team_codes(team))].copy()
         if roster.empty:continue
         roster['_w']=pd.to_numeric(roster[week_col],errors='coerce')
-        roster=roster.sort_values('_w')
+        roster=roster[roster['_w']<slate_week].sort_values('_w')
+        if roster.empty:continue
         for name,rows in roster.groupby(name_col,sort=False):
             pos=str(rows[pos_col].iloc[-1]).upper().strip()
-            if pos not in ('QB','RB','WR','TE') or len(rows)<3:continue
+            if pos not in ('QB','RB','WR','TE') or len(rows)<5:continue
+            # Require current team membership in the most recent recorded week.
+            latest_week=float(df[week_col].pipe(pd.to_numeric,errors='coerce').max())
+            if rows['_w'].max()<latest_week-1:continue
             if pos=='QB':
                 prop_map=[('passing_yards',['passing_yards','pass_yards']),('passing_attempts',['attempts','passing_attempts']),('passing_completions',['completions','passing_completions']),('rushing_yards',['rushing_yards','rush_yards']),('rushing_attempts',['carries','rushing_attempts','rush_attempts'])]
                 usage_col=column(rows,['attempts','passing_attempts'])
@@ -518,6 +536,11 @@ def weekly_candidates():
                 t=trend(values)
                 baseline=t['season']; projected=t['weighted']
                 if baseline<=0 or projected<=0:continue
+                # Minimum actionable volumes: don't rank 0.23 receptions.
+                minimums={'receptions':2.0,'receiving_yards':20.0,'rushing_yards':25.0,
+                          'rushing_attempts':6.0,'passing_yards':140.0,
+                          'passing_attempts':20.0,'passing_completions':12.0}
+                if projected<minimums.get(prop,0):continue
                 # Ranking reflects recent change and opponent position-specific allowance.
                 defense_factor=1.0; defense_games=0
                 if prop in ('receiving_yards','receptions'):
@@ -538,7 +561,7 @@ def weekly_candidates():
                 # Penalize unstable and small samples; avoid comparing raw yard and catch counts.
                 quality=confidence(values,defense_games)
                 score=round(max(-30,min(30,relative*100))+(5 if quality=='HIGH' else 2 if quality=='MEDIUM' else -3),1)
-                if score<=0:continue
+                if score<=5 or abs(projected-baseline)<max(.5,baseline*.08):continue
                 reasons=[]
                 if t['last_3']>baseline*1.08:reasons.append('Recent production above season average')
                 if defense_factor>1.025:reasons.append('Opponent allows above-average production to this position')
