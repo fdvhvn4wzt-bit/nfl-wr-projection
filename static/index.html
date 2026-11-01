@@ -17,8 +17,8 @@ select,input{width:100%;padding:14px;background:#0d1728;border:1px solid #50617a
 button{background:#3b82f6;color:white;border:0;border-radius:11px;padding:15px;font-weight:700;font-size:15px;width:100%;margin-top:13px}
 button:disabled{opacity:.5}
 .tabs,.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
-.tabs button{background:#26364e;padding:12px 4px;font-size:12px}
+.tabs{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tabs button{background:#26364e;padding:12px 3px;font-size:11px}
 .tabs .active{background:#3b82f6}
 .metric{background:#0d1728;border-radius:11px;padding:13px;min-width:0}
 .label{font-size:12px;color:#aebbd0}
@@ -52,6 +52,7 @@ body{padding:12px}
 <button class="active" id="receivingTab" onclick="showPanel('receiving')">RECEIVING PROPS</button>
 <button id="rushingTab" onclick="showPanel('rushing')">RB PROPS</button>
 <button id="qbTab" onclick="showPanel('qb')">QB PROPS</button>
+<button id="weeklyTab" onclick="showPanel('weekly')">WEEKLY TOP 20</button>
 </div>
 
 <div class="card">
@@ -61,8 +62,6 @@ body{padding:12px}
 <label>Opposing Defense</label>
 <select id="defense"></select>
 </div>
-
-<!-- EXISTING WR / TE RECEIVING SECTION -->
 
 <section id="receivingPanel">
 <div class="card">
@@ -138,8 +137,6 @@ Improved: recent production and expected receptions, adjusted conservatively for
 </div>
 </section>
 
-<!-- EXISTING FOUR-PROP RUNNING BACK SECTION -->
-
 <section id="rushingPanel" hidden>
 <div class="card">
 <h2>2. Running Back</h2>
@@ -185,6 +182,7 @@ DraftKings lines appear after tapping Fetch; manual lines are used when a DraftK
 <div class="card">
 <h2>RB Receiving Projections</h2>
 <div class="grid" id="rbReceivingMetrics"></div>
+
 <h2 class="section">Opponent Defense vs RB Receiving</h2>
 <div class="grid" id="rbReceivingDefense"></div>
 <p class="small" id="rbReceivingNotes"></p>
@@ -193,6 +191,7 @@ DraftKings lines appear after tapping Fetch; manual lines are used when a DraftK
 <div class="card">
 <h2>Running Back Projection</h2>
 <div class="grid" id="rushMetrics"></div>
+
 <h2 class="section">Opposing Run Defense</h2>
 <div class="grid" id="rushDefenseMetrics"></div>
 <p class="small" id="rushSamples"></p>
@@ -216,10 +215,7 @@ Original blended formula shown for comparison.
 </div>
 </section>
 
-<!-- NEW SEVEN-PROP QUARTERBACK SECTION -->
-
 <section id="qbPanel" hidden>
-
 <div class="card">
 <h2>2. Quarterback</h2>
 <label>Quarterback</label>
@@ -229,14 +225,11 @@ Original blended formula shown for comparison.
 <div class="card">
 <h2>3. Optional QB Prop Lines</h2>
 <div class="grid" id="qbLineInputs"></div>
-<button id="qbCalculate" onclick="runQbProjection()">
-GENERATE ALL SEVEN QB PROJECTIONS
-</button>
+<button id="qbCalculate" onclick="runQbProjection()">GENERATE ALL SEVEN QB PROJECTIONS</button>
 <div id="qbError" class="error"></div>
 </div>
 
 <div id="qbResults" hidden>
-
 <div class="card hero">
 <div class="small">PROJECTED PASSING YARDS</div>
 <div class="big" id="qbHero"></div>
@@ -274,11 +267,27 @@ Confidence is a data-quality label, not a betting win probability.
 <p id="qbStatus" class="small">Fetch after generating a projection.</p>
 <div class="grid" id="qbLive"></div>
 </div>
-
 </div>
 </section>
 
-<!-- CONFIDENCE GUIDE -->
+<section id="weeklyPanel" hidden>
+<div class="card">
+<h2>🏆 Weekly Top 20 Statistical Opportunities</h2>
+<p class="small">
+Available Saturday from 8:00 AM Hawaii time.
+Uses NFL stats, not DraftKings.
+No Odds API credits.
+</p>
+<p id="weeklyStatus" class="small">
+Open this tab to load the weekly list.
+</p>
+<p class="small" style="color:#fde68a">
+⚠️ Injury status is not verified.
+Check official game-day availability before using any projection.
+</p>
+<div id="weeklyCards"></div>
+</div>
+</section>
 
 <div class="card">
 <h2>📊 Confidence Rating Guide</h2>
@@ -307,19 +316,27 @@ let projections = {
 let rbDraftKings = {};
 let qbProjection = null;
 let qbDraftKings = {};
+let weeklyLoaded = false;
 
 function showPanel(panel) {
   const receiving = panel === "receiving";
   const rushing = panel === "rushing";
   const qb = panel === "qb";
+  const weekly = panel === "weekly";
 
   $("receivingPanel").hidden = !receiving;
   $("rushingPanel").hidden = !rushing;
   $("qbPanel").hidden = !qb;
+  $("weeklyPanel").hidden = !weekly;
 
   $("receivingTab").classList.toggle("active", receiving);
   $("rushingTab").classList.toggle("active", rushing);
   $("qbTab").classList.toggle("active", qb);
+  $("weeklyTab").classList.toggle("active", weekly);
+
+  if (weekly) {
+    loadWeekly();
+  }
 }
 
 function confidenceBadge(value, label) {
@@ -582,7 +599,7 @@ function quickRead(id, data, projection, lineInput) {
   $(id).style.whiteSpace = "pre-line";
 }
 
-// WR / TE RECEIVING PROJECTIONS
+// RECEIVING PROJECTIONS
 
 async function runProjection() {
   const button = $("calculate");
@@ -731,7 +748,7 @@ async function runProjection() {
   }
 }
 
-// FOUR-PROP RUNNING BACK PROJECTIONS
+// RUNNING BACK PROJECTIONS
 
 function manualLine(id) {
   const value = $(id).value;
@@ -1195,7 +1212,7 @@ async function getLive(kind) {
   }
 }
 
-// NEW QB PROPS
+// QB PROPS
 
 const QB_PROPS = [
   ["passing_yards", "Passing Yards", "yards"],
@@ -1432,7 +1449,145 @@ async function getQbLive() {
   }
 }
 
-// RESET RESULTS WHEN MATCHUP OR PLAYER CHANGES
+// WEEKLY TOP 20
+
+async function loadWeekly() {
+  if (weeklyLoaded) {
+    return;
+  }
+
+  $("weeklyStatus").textContent =
+    "Analyzing upcoming games and player trends…";
+
+  try {
+    const data = await jsonFetch("/api/weekly-top20");
+
+    weeklyLoaded = true;
+
+    $("weeklyStatus").textContent =
+      "Generated: " + data.as_of_hst +
+      " | Upcoming games: " + data.games +
+      " | Odds API credits: 0";
+
+    const root = $("weeklyCards");
+    root.replaceChildren();
+
+    if (!data.items.length) {
+      root.append(
+        document.createTextNode(
+          "No eligible upcoming games or sufficient player statistics found."
+        )
+      );
+      return;
+    }
+
+    data.items.forEach((player, index) => {
+      const card = document.createElement("div");
+      card.className = "metric";
+      card.style.margin = "12px 0";
+
+      const heading = document.createElement("h3");
+      heading.textContent =
+        "#" + (index + 1) +
+        " " + player.player +
+        " (" + player.position + ")" +
+        " — " + player.team +
+        " vs " + player.opponent;
+
+      const body = document.createElement("p");
+      body.style.whiteSpace = "pre-line";
+
+      body.textContent =
+        player.prop.replaceAll("_", " ").toUpperCase() +
+        " | Projected: " + player.projection +
+        " | Season avg: " + player.season_average +
+        "\nOpportunity score: " + player.score +
+        " | Data confidence: " + player.confidence +
+        "\nWhy: " + (player.reasons || []).join(" · ");
+
+      const button = document.createElement("button");
+      button.textContent = "VIEW PLAYER";
+
+      button.onclick = () => viewWeeklyPlayer(player);
+
+      card.append(heading, body, button);
+      root.append(card);
+    });
+
+  } catch (error) {
+    $("weeklyStatus").textContent =
+      "Weekly list unavailable: " + error.message;
+  }
+}
+
+// VIEW PLAYER BUTTON
+
+async function viewWeeklyPlayer(player) {
+  $("offense").value = player.team;
+  $("defense").value = player.opponent;
+
+  resetProjections();
+
+  await loadRoster();
+
+  const panel =
+    player.position === "QB"
+      ? "qb"
+      : player.position === "RB"
+        ? "rushing"
+        : "receiving";
+
+  const selectId =
+    panel === "qb"
+      ? "qbPlayer"
+      : panel === "rushing"
+        ? "runningBack"
+        : "receiver";
+
+  const select = $(selectId);
+
+  const matchingOption = [...select.options].find(
+    option =>
+      option.value.toLowerCase() ===
+      player.player.toLowerCase()
+  );
+
+  if (!matchingOption) {
+    showPanel(panel);
+
+    alert(
+      "Player not found on the current roster. Select manually."
+    );
+
+    return;
+  }
+
+  select.value = matchingOption.value;
+
+  if (panel === "receiving") {
+    const qbSelect = $("qb");
+
+    if (qbSelect.options.length > 1) {
+      qbSelect.selectedIndex = 1;
+    }
+  }
+
+  showPanel(panel);
+
+  if (panel === "qb") {
+    await runQbProjection();
+
+  } else if (panel === "rushing") {
+    await runRushingProjection();
+
+  } else {
+    alert(
+      "Select the correct quarterback, then generate the receiving projection."
+    );
+  }
+}
+
+// RESET PROJECTIONS WHEN SELECTIONS CHANGE
 
 function resetProjections() {
   projections = {
