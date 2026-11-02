@@ -284,7 +284,6 @@ def rushing(offense_team:str,running_back:str,defense:str,sportsbook:str='Other'
     ye=improved-yards_line if yards_line is not None else None;ae=attempts-attempts_line if attempts_line is not None else None
     return {'offense_team':offense_team,'running_back':running_back,'defense':defense,'opponent_name':NFL_TEAMS[defense],'season':season(),'projected_attempts':round(attempts,2),'projected_rushing_yards':round(improved,2),'improved_projected_rushing_yards':round(improved,2),'original_projected_rushing_yards':round(original,2),'player_attempts_average':round(avg(rw.c.tolist()),2),'player_rushing_yards_average':round(avg(rw.y.tolist()),2),'player_yards_per_carry':round(player_ypc,2),'team_attempts_average':round(teamavg,2),'carry_share':round(share*100,2),'defense_yards_per_attempt_allowed':round(def_ypc,2),'adjusted_yards_per_carry':round(blended,2),'player_games_sampled':len(rw),'defense_games_sampled':dg,'quick_factors':reasons,'usage_adjustment_pct':round((usage_factor-1)*100,1),'position_matchup_adjustment_pct':round((defense_factor-1)*50*100,1),'position_defense_yards_allowed':pos_allowed,'league_position_yards_allowed':league_allowed,'position_defense_games':pos_games,'recent_form':{'rushing_yards':yards_trend,'rushing_attempts':attempts_trend},'confidence':{'rushing_yards':confidence(rw.y.tolist(),dg),'rushing_attempts':confidence(rw.c.tolist(),dg)},'rb_projected_targets':round(projected_targets,2),'rb_receiving_yards_projection':round(projected_rb_receiving_yards,2),'rb_receptions_projection':round(projected_rb_receptions,2),'rb_receiving_yards_average':round(avg(rb_yards),2),'rb_receptions_average':round(avg(rb_receptions),2),'rb_targets_average':round(avg(rb_targets),2),'rb_catch_rate':round(player_catch*100,2),'rb_yards_per_reception':round(player_ypr,2),'rb_receiving_defense':defense_rec,'rb_receiving_reasons':rb_receiving_reasons,'rb_receiving_confidence':rb_receiving_confidence,'rb_receiving_recent_form':{'targets':target_trend,'receptions':reception_trend,'receiving_yards':receiving_yards_trend},'sportsbook':sportsbook if sportsbook in SPORTSBOOKS else 'Other','yards_line':yards_line,'yards_edge':round(ye,2) if ye is not None else None,'yards_lean':lean(ye),'attempts_line':attempts_line,'attempts_edge':round(ae,2) if ae is not None else None,'attempts_lean':lean(ae)}
 
-
 # Additional QB projections. Existing WR/TE and RB endpoints are unchanged.
 def qb_defensive_rates(df, defense, week_col, opponent_col):
     cols = {
@@ -439,3 +438,167 @@ def live_odds(offense_team:str,defense:str,player:str):
     return {'available':available,'books':result,'event':event.get('commence_time'),'updated_at':(cache[event_key][2] if cache.get(event_key) else now).isoformat(),'stale':stale,'cache_minutes':ODDS_CACHE_MINUTES,'message':('â ï¸ Showing cached odds; live refresh failed.' if stale else ('' if available else 'No matching player prop markets currently posted by DraftKings.'))}
 
 app.mount('/static',StaticFiles(directory='static'),name='static')
+
+# Weekly statistical opportunities: no sportsbook API requests.
+from zoneinfo import ZoneInfo
+WEEKLY_LOCK = Lock()
+WEEKLY_CACHE = {}
+
+def weekly_window():
+    now = datetime.now(ZoneInfo('Pacific/Honolulu'))
+    # A new list becomes eligible at 8:00 AM HST each Saturday.
+    days = (now.weekday() - 5) % 7
+    last_sat = (now - timedelta(days=days)).replace(hour=8, minute=0, second=0, microsecond=0)
+    if last_sat > now: last_sat -= timedelta(days=7)
+    return last_sat, now
+
+def weekly_schedule():
+    """Select exactly one NFL schedule week, never a rolling nine-day window."""
+    try:
+        schedule = nfl.load_schedules(seasons=[season()]).to_pandas()
+    except Exception as exc:
+        raise HTTPException(503, f'Unable to load NFL schedule: {exc}')
+    hc=column(schedule,['home_team']); ac=column(schedule,['away_team'])
+    dc=column(schedule,['gameday','game_date']); tc=column(schedule,['gametime','game_time'])
+    wc=column(schedule,['week']); st=column(schedule,['game_type','season_type'])
+    if not all([hc,ac,dc,wc]):
+        raise HTTPException(503,'NFL schedule is missing team, date, or week fields.')
+    schedule=schedule.copy()
+    if st:
+        schedule=schedule[schedule[st].astype(str).str.upper().isin(['REG','REGULAR'])].copy()
+    # nflverse gametime is Eastern local time. Date-only records cannot be
+    # trusted for an accurate upcoming slate, so fail closed instead.
+    kickoff=column(schedule,['start_time','game_datetime','kickoff'])
+    if kickoff:
+        times=pd.to_datetime(schedule[kickoff],errors='coerce',utc=True)
+    elif tc:
+        local=pd.to_datetime(schedule[dc].astype(str)+' '+schedule[tc].astype(str),errors='coerce')
+        times=local.dt.tz_localize('America/New_York',ambiguous='NaT',nonexistent='NaT').dt.tz_convert('UTC')
+    else:
+        raise HTTPException(503,'NFL schedule has no kickoff times; refusing to guess matchups.')
+    schedule['_kickoff']=times
+    schedule['_week']=pd.to_numeric(schedule[wc],errors='coerce')
+    now=pd.Timestamp.now(tz='UTC')
+    upcoming=schedule[(schedule['_kickoff']>now)&schedule['_week'].notna()].copy()
+    if upcoming.empty:return [],0
+    # The nearest unplayed game defines the slate week; include only
+    # games from that exact week that have not started.
+    nearest=upcoming.sort_values('_kickoff').iloc[0]
+    target_week=int(nearest['_week'])
+    selected=upcoming[upcoming['_week']==target_week].sort_values('_kickoff')
+    games=[]; seen=set()
+    for _,g in selected.iterrows():
+        home=str(g[hc]).upper().strip().replace('LA','LAR')
+        away=str(g[ac]).upper().strip().replace('LA','LAR')
+        if home not in NFL_TEAMS or away not in NFL_TEAMS:continue
+        if home in seen or away in seen:continue
+        seen.update([home,away])
+        games.extend([(home,away),(away,home)])
+    return games,target_week
+
+def weekly_candidates():
+    df=stats(); team_col=column(df,['recent_team','team','team_abbr','posteam'])
+    name_col=column(df,['player_display_name','player_name','full_name','display_name','player'])
+    pos_col=column(df,['position','player_position']); week_col=column(df,['week'])
+    if not all([team_col,name_col,pos_col,week_col]):raise HTTPException(503,'Weekly player statistics fields unavailable.')
+    games,slate_week=weekly_schedule()
+    if not games: return [],0
+    candidates=[]
+    for team,opponent in games:
+        roster=df[df[team_col].astype(str).str.upper().str.strip().isin(team_codes(team))].copy()
+        if roster.empty:continue
+        roster['_w']=pd.to_numeric(roster[week_col],errors='coerce')
+        roster=roster[roster['_w']<slate_week].sort_values('_w')
+        if roster.empty:continue
+        for name,rows in roster.groupby(name_col,sort=False):
+            pos=str(rows[pos_col].iloc[-1]).upper().strip()
+            if pos not in ('QB','RB','WR','TE') or len(rows)<5:continue
+            # Require current team membership in the most recent recorded week.
+            latest_week=float(df[week_col].pipe(pd.to_numeric,errors='coerce').max())
+            if rows['_w'].max()<latest_week-1:continue
+            if pos=='QB':
+                prop_map=[('passing_yards',['passing_yards','pass_yards']),('passing_attempts',['attempts','passing_attempts']),('passing_completions',['completions','passing_completions']),('rushing_yards',['rushing_yards','rush_yards']),('rushing_attempts',['carries','rushing_attempts','rush_attempts'])]
+                usage_col=column(rows,['attempts','passing_attempts'])
+            elif pos=='RB':
+                prop_map=[('rushing_yards',['rushing_yards','rush_yards']),('rushing_attempts',['carries','rushing_attempts','rush_attempts']),('receiving_yards',['receiving_yards','rec_yards']),('receptions',['receptions'])]
+                usage_col=column(rows,['carries','rushing_attempts','rush_attempts'])
+            else:
+                prop_map=[('receiving_yards',['receiving_yards','rec_yards']),('receptions',['receptions'])]
+                usage_col=column(rows,['targets'])
+            usage=numeric(rows,usage_col).tolist()
+            if sum(usage[-3:])/min(3,len(usage))< (8 if pos=='QB' else 3 if pos=='RB' else 2):continue
+            for prop,cols in prop_map:
+                col=column(rows,cols)
+                if not col:continue
+                values=numeric(rows,col).tolist()
+                t=trend(values)
+                baseline=t['season']; projected=t['weighted']
+                if baseline<=0 or projected<=0:continue
+                # Minimum actionable volumes: don't rank 0.23 receptions.
+                minimums={'receptions':2.0,'receiving_yards':20.0,'rushing_yards':25.0,
+                          'rushing_attempts':6.0,'passing_yards':140.0,
+                          'passing_attempts':20.0,'passing_completions':12.0}
+                if projected<minimums.get(prop,0):continue
+                # Ranking reflects recent change and opponent position-specific allowance.
+                defense_factor=1.0; defense_games=0
+                if prop in ('receiving_yards','receptions'):
+                    metric_cols=['receiving_yards','rec_yards'] if prop=='receiving_yards' else ['receptions']
+                    defense_factor,defense_games,_,_=position_defense(df,opponent,pos,metric_cols,week_col,column(df,['opponent_team','defteam','opponent']))
+                elif pos=='RB' and prop=='rushing_yards':
+                    defense_factor,defense_games,_,_=position_defense(df,opponent,'RB',['rushing_yards','rush_yards'],week_col,column(df,['opponent_team','defteam','opponent']))
+                elif pos=='QB':
+                    rates=qb_defensive_rates(df,opponent,week_col,column(df,['opponent_team','defteam','opponent']))
+                    k='qb_'+prop if prop.startswith('rushing') else prop
+                    allowed=rates['allowed'].get(k); league=rates['league'].get(k)
+                    defense_games=rates['games']
+                    if allowed is not None and league and league>0 and defense_games>=3:
+                        defense_factor=1+.45*(max(.8,min(1.2,allowed/league))-1)
+                # Shrink the matchup influence; don't pretend this is a sportsbook edge.
+                projected=max(0,projected*(1+.5*(defense_factor-1)))
+                relative=(projected/baseline-1)
+                # Penalize unstable and small samples; avoid comparing raw yard and catch counts.
+                quality=confidence(values,defense_games)
+
+                if quality=='LOW':
+
+                    continue
+
+                score=round(max(-30,min(30,relative*100))+(5 if quality=='HIGH' else 2),1)
+                if score<=5 or abs(projected-baseline)<max(.5,baseline*.08):continue
+                reasons=[]
+                if t['last_3']>baseline*1.08:reasons.append('Recent production above season average')
+                if defense_factor>1.025:reasons.append('Opponent allows above-average production to this position')
+                if quality=='LOW':reasons.append('Limited or variable data â use caution')
+                if not reasons:reasons.append('Recent form and season baseline favor this prop')
+                candidates.append({'player':str(name),'position':pos,'team':team,'opponent':opponent,
+                    'prop':prop,'projection':round(projected,2),'season_average':round(baseline,2),
+                    'score':score,'confidence':quality,'reasons':reasons,'direction':'ABOVE BASELINE'})
+    # Prevent one player dominating the entire leaderboard; at most two props each.
+    candidates.sort(key=lambda x:x['score'],reverse=True)
+    selected=[]; counts={}
+    for item in candidates:
+        key=(item['team'],item['player'])
+        if counts.get(key,0)>=2:continue
+        counts[key]=counts.get(key,0)+1
+        selected.append(item)
+        if len(selected)==20:break
+    return selected,len(games)//2
+
+@app.get('/api/weekly-top20')
+def weekly_top20():
+    window,now=weekly_window()
+    key=window.isoformat()
+    with WEEKLY_LOCK:
+        cached=WEEKLY_CACHE.get(key)
+        if cached:return cached
+        items,games=weekly_candidates()
+        result={'as_of_hst':now.strftime('%Y-%m-%d %I:%M %p HST'),
+            'weekly_window_hst':window.strftime('%Y-%m-%d %I:%M %p HST'),
+            'games':games,'items':items,'uses_odds_credits':False,
+            'injuries_verified':False,
+            'note':'Statistical opportunities, not sportsbook edges. Injury and inactive status are NOT verified. Check official reports before using.'}
+        # Cache in memory; on Render free restarts, the list will rebuild on next view.
+        WEEKLY_CACHE[key]=result
+        for old in list(WEEKLY_CACHE):
+            if old!=key:del WEEKLY_CACHE[old]
+        return result
