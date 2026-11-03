@@ -1,253 +1,236 @@
 
-# ============================================================
-# POSITION-SPECIFIC TOUCHDOWNS ALLOWED
-# Uses completed current-season NFL player statistics.
-# No Odds API requests. Existing projections are unchanged.
-# ============================================================
+/* ============================================================
+   POSITION-SPECIFIC DEFENSIVE TOUCHDOWNS
+   Adds actual TD statistics to existing defense sections.
+   Existing projections and features remain unchanged.
+   ============================================================ */
 
-TD_CACHE_MINUTES = 60
-
-
-def defensive_touchdown_data():
-    now = datetime.now(timezone.utc)
-    current_season = season()
-    saved = cache.get("defensive_touchdowns")
-
-    if saved and saved[0] == current_season and now < saved[1]:
-        return saved[2]
-
-    df = stats().copy()
-
-    position_col = column(df, ["position", "player_position"])
-    opponent_col = column(
-        df, ["opponent_team", "defteam", "opponent"]
-    )
-    week_col = column(df, ["week"])
-
-    if not all([position_col, opponent_col, week_col]):
-        raise HTTPException(
-            503,
-            "NFL statistics are missing position, opponent, or week."
-        )
-
-    df["_td_position"] = (
-        df[position_col].astype(str).str.upper().str.strip()
-    )
-    df["_td_opponent"] = (
-        df[opponent_col]
-        .astype(str)
-        .str.upper()
-        .str.strip()
-        .replace({"LA": "LAR"})
-    )
-    df["_td_week"] = pd.to_numeric(
-        df[week_col], errors="coerce"
-    )
-
-    df = df[
-        df["_td_opponent"].isin(NFL_TEAMS)
-        & df["_td_week"].notna()
-    ].copy()
-
-    if df.empty:
-        raise HTTPException(
-            503, "No completed NFL games available for TD analysis."
-        )
-
-    # Every observed opponent/week is a completed game.
-    # This lets us include zero-TD games rather than only
-    # counting games where a touchdown was recorded.
-    all_games = (
-        df[["_td_opponent", "_td_week"]]
-        .drop_duplicates()
-        .copy()
-    )
-
-    touchdown_columns = {
-        "receiving": column(
-            df, ["receiving_tds", "receiving_touchdowns"]
-        ),
-        "rushing": column(
-            df, ["rushing_tds", "rushing_touchdowns"]
-        ),
-        "passing": column(
-            df, ["passing_tds", "passing_touchdowns"]
-        ),
+function touchdownMetricItems(stat, label) {
+    if (!stat || stat.available === false) {
+        return [[label, "Data unavailable"]];
     }
 
-    if not any(touchdown_columns.values()):
-        raise HTTPException(
-            503,
-            "Touchdown columns are unavailable in NFL statistics."
-        )
+    const rank = stat.nfl_rank != null
+        ? "#" + stat.nfl_rank + " of " + stat.ranked_defenses
+        : "Not ranked";
 
-    result = {}
+    return [
+        [label + " — Season Total", stat.season_total],
+        [label + " — Per Game", stat.per_game],
+        [
+            label + " — Last " + stat.last_5_games + " Games",
+            stat.last_5_total
+        ],
+        [
+            label + " — Last " + stat.last_5_games + " Per Game",
+            stat.last_5_per_game
+        ],
+        [label + " — NFL Rank", rank]
+    ];
+}
 
-    definitions = {
-        "WR": [("receiving", "Receiving TDs Allowed")],
-        "TE": [("receiving", "Receiving TDs Allowed")],
-        "RB": [
-            ("rushing", "RB Rushing TDs Allowed"),
-            ("receiving", "RB Receiving TDs Allowed"),
-        ],
-        "QB": [
-            ("passing", "Passing TDs Allowed"),
-            ("rushing", "QB Rushing TDs Allowed"),
-        ],
+function appendTouchdownMetrics(containerId, items) {
+    const container = $(containerId);
+    if (!container) return;
+
+    container.querySelectorAll(".td-added-metric")
+        .forEach(element => element.remove());
+
+    for (const [label, value] of items) {
+        const element = metric(label, value);
+        element.classList.add("td-added-metric");
+        container.append(element);
     }
+}
 
-    for position, metrics_to_build in definitions.items():
-        position_rows = df[
-            df["_td_position"] == position
-        ].copy()
+async function loadDefenseTouchdowns(position, defense) {
+    const params = new URLSearchParams({
+        position: position,
+        defense: defense
+    });
 
-        position_result = {}
+    return await jsonFetch(
+        "/api/defense-touchdowns?" + params.toString()
+    );
+}
 
-        for touchdown_type, label in metrics_to_build:
-            source_column = touchdown_columns[touchdown_type]
+async function showReceivingTouchdowns(data) {
+    const defense = data.defense;
+    const player = data.receiver;
 
-            if source_column is None:
-                position_result[touchdown_type] = {
-                    "label": label,
-                    "available": False,
-                    "reason": "Touchdown statistic unavailable",
-                }
-                continue
+    // Determine the receiver's actual WR or TE position
+    // from the selected roster option.
+    const selected = $("receiver").selectedOptions[0];
+    const position = selected?.dataset?.position || "WR";
 
-            position_rows["_td_value"] = numeric(
-                position_rows, source_column
+    const containerId = "receivingDefenseMetrics";
+
+    try {
+        const result = await loadDefenseTouchdowns(
+            position, defense
+        );
+
+        // Prevent an older request from updating a new matchup.
+        if (
+            $("defense").value !== defense ||
+            $("receiver").value !== player
+        ) return;
+
+        const stat = result.touchdowns?.receiving;
+
+        appendTouchdownMetrics(
+            containerId,
+            touchdownMetricItems(
+                stat,
+                position + " Receiving TDs Allowed"
             )
+        );
+    } catch (error) {
+        appendTouchdownMetrics(containerId, [
+            ["Receiving TDs Allowed", "Unavailable: " + error.message]
+        ]);
+    }
+}
 
-            totals = (
-                position_rows.groupby(
-                    ["_td_opponent", "_td_week"],
-                    as_index=False
-                )["_td_value"]
-                .sum()
+async function showRbTouchdowns(data) {
+    const defense = data.defense;
+    const player = data.running_back;
+
+    try {
+        const result = await loadDefenseTouchdowns("RB", defense);
+
+        if (
+            $("defense").value !== defense ||
+            $("runningBack").value !== player
+        ) return;
+
+        appendTouchdownMetrics(
+            "rushDefenseMetrics",
+            touchdownMetricItems(
+                result.touchdowns?.rushing,
+                "RB Rushing TDs Allowed"
             )
+        );
 
-            weekly = (
-                all_games.merge(
-                    totals,
-                    on=["_td_opponent", "_td_week"],
-                    how="left"
-                )
-                .fillna({"_td_value": 0})
-                .sort_values("_td_week")
+        appendTouchdownMetrics(
+            "rbReceivingDefense",
+            touchdownMetricItems(
+                result.touchdowns?.receiving,
+                "RB Receiving TDs Allowed"
             )
+        );
+    } catch (error) {
+        appendTouchdownMetrics("rushDefenseMetrics", [
+            ["RB Rushing TDs Allowed", "Unavailable: " + error.message]
+        ]);
+        appendTouchdownMetrics("rbReceivingDefense", [
+            ["RB Receiving TDs Allowed", "Unavailable: " + error.message]
+        ]);
+    }
+}
 
-            by_defense = {}
+async function showQbTouchdowns(data) {
+    const defense = data.defense;
+    const player = data.quarterback;
 
-            for defense, games in weekly.groupby(
-                "_td_opponent"
-            ):
-                games = games.sort_values("_td_week")
-                values = games["_td_value"].tolist()
+    try {
+        const result = await loadDefenseTouchdowns("QB", defense);
 
-                if not values:
-                    continue
+        if (
+            $("defense").value !== defense ||
+            $("qbPlayer").value !== player
+        ) return;
 
-                total = sum(values)
-                game_count = len(values)
-
-                by_defense[defense] = {
-                    "label": label,
-                    "available": True,
-                    "season_total": int(round(total)),
-                    "per_game": round(total / game_count, 2),
-                    "last_5_total": int(
-                        round(sum(values[-5:]))
-                    ),
-                    "last_5_per_game": round(
-                        sum(values[-5:]) / len(values[-5:]), 2
-                    ),
-                    "games": game_count,
-                    "last_5_games": min(5, game_count),
-                }
-
-            # Rank defenses from most TDs allowed per game
-            # to fewest. Equal rates receive the same rank.
-            ranked = sorted(
-                by_defense,
-                key=lambda team: (
-                    -by_defense[team]["per_game"],
-                    team
-                )
+        const items = [
+            ...touchdownMetricItems(
+                result.touchdowns?.passing,
+                "Passing TDs Allowed"
+            ),
+            ...touchdownMetricItems(
+                result.touchdowns?.rushing,
+                "QB Rushing TDs Allowed"
             )
+        ];
 
-            previous_rate = None
-            previous_rank = None
+        appendTouchdownMetrics("qbDefense", items);
+    } catch (error) {
+        appendTouchdownMetrics("qbDefense", [
+            ["QB TDs Allowed", "Unavailable: " + error.message]
+        ]);
+    }
+}
 
-            for index, defense in enumerate(ranked):
-                rate = by_defense[defense]["per_game"]
+/*
+   Save the existing projection functions and extend them.
+   This does not replace their calculations.
+*/
 
-                if previous_rate is not None and rate == previous_rate:
-                    rank = previous_rank
-                else:
-                    rank = index + 1
+const originalReceivingProjection = runProjection;
+runProjection = async function () {
+    await originalReceivingProjection();
 
-                by_defense[defense]["nfl_rank"] = rank
-                by_defense[defense]["ranked_defenses"] = len(ranked)
+    if (projections.receiving && !$("results").hidden) {
+        await showReceivingTouchdowns(projections.receiving);
+    }
+};
 
-                previous_rate = rate
-                previous_rank = rank
+const originalRushingProjection = runRushingProjection;
+runRushingProjection = async function () {
+    await originalRushingProjection();
 
-            position_result[touchdown_type] = by_defense
+    if (projections.rushing && !$("rushResults").hidden) {
+        await showRbTouchdowns(projections.rushing);
+    }
+};
 
-        result[position] = position_result
+const originalQbProjection = runQbProjection;
+runQbProjection = async function () {
+    await originalQbProjection();
 
-    cache["defensive_touchdowns"] = (
-        current_season,
-        now + timedelta(minutes=TD_CACHE_MINUTES),
-        result
-    )
+    if (qbProjection && !$("qbResults").hidden) {
+        await showQbTouchdowns(qbProjection);
+    }
+};
 
-    return result
+/*
+   Preserve player positions in the roster dropdown.
+   The existing loadRoster() populates the dropdown;
+   this wrapper adds WR/TE position metadata afterward.
+*/
 
+const originalLoadRoster = loadRoster;
 
-@app.get("/api/defense-touchdowns")
-def defense_touchdowns(defense: str, position: str):
-    defense = defense.upper().strip()
-    position = position.upper().strip()
+loadRoster = async function () {
+    await originalLoadRoster();
 
-    if defense not in NFL_TEAMS:
-        raise HTTPException(400, "Invalid NFL defense.")
+    const offense = $("offense").value;
+    if (!offense) return;
 
-    if position not in ("WR", "TE", "RB", "QB"):
-        raise HTTPException(
-            400, "Position must be WR, TE, RB, or QB."
-        )
+    try {
+        const roster = await jsonFetch(
+            "/api/roster?team=" + encodeURIComponent(offense)
+        );
 
-    data = defensive_touchdown_data()
-    position_data = data.get(position, {})
+        if ($("offense").value !== offense) return;
 
-    result = {}
+        const positions = new Map(
+            (roster.receivers || []).map(player => [
+                player.name,
+                player.position
+            ])
+        );
 
-    for touchdown_type, defenses in position_data.items():
-        if not isinstance(defenses, dict):
-            continue
+        for (const option of $("receiver").options) {
+            const position = positions.get(option.value);
 
-        if defenses.get("available") is False:
-            result[touchdown_type] = defenses
-            continue
-
-        result[touchdown_type] = defenses.get(
-            defense,
-            {
-                "available": False,
-                "reason": "No completed games for this defense",
+            if (position === "WR" || position === "TE") {
+                option.dataset.position = position;
             }
-        )
-
-    return {
-        "season": season(),
-        "defense": defense,
-        "defense_name": NFL_TEAMS[defense],
-        "position": position,
-        "touchdowns": result,
-        "uses_odds_credits": False,
-        "ranking_note": (
-            "Rank 1 means the most touchdowns allowed "
-            "per game to this position."
-        ),
+        }
+    } catch (error) {
+        console.warn(
+            "Could not load WR/TE position metadata:",
+            error.message
+        );
     }
+};
