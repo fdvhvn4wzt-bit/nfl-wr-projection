@@ -1826,7 +1826,7 @@ function propTrendAgreement(prop){
 function trendPanel(prop){
  const trend=propTrendAgreement(prop),panel=document.createElement("div");panel.className="trend-panel";
  panel.append(historyText("trend-title "+(trend.winner==="OVER"?"trend-over":trend.winner==="UNDER"?"trend-under":"trend-mixed"),"PROP TREND AGREEMENT: "+trend.label));
- for(const vote of trend.votes)panel.append(historyText("trend-detail",(vote.direction==="OVER"?"â² OVER":vote.direction==="UNDER"?"â¼ UNDER":"â Neutral / unavailable")+" | "+vote.name));
+ for(const vote of trend.votes)panel.append(historyText("trend-detail",(vote.direction==="OVER"?"OVER":vote.direction==="UNDER"?"UNDER":"Neutral / unavailable")+" | "+vote.name));
  panel.append(historyText("trend-detail","Agreement is descriptive, not a win probability. The model may already incorporate defense."));
  return panel;
 }
