@@ -64,6 +64,9 @@ body.info-open{overflow:hidden}
 .secondary-button{background:#34445d}
 .danger-button{background:#7f1d1d}
 .history-meta{font-size:12px;color:#afbdd1;line-height:1.6;margin-top:8px}
+.trend-panel{margin:12px 0;padding:12px;border:1px solid #50617a;border-radius:12px;background:#172235}
+.trend-title{font-size:13px;font-weight:800}.trend-over{color:#86efac}.trend-under{color:#fca5a5}.trend-mixed{color:#fde68a}
+.trend-detail{font-size:12px;color:#d9e2ef;line-height:1.55;margin-top:6px}
 @media(max-width:450px){
 body{padding:12px}
 .value{font-size:19px}
@@ -331,8 +334,9 @@ body{padding:12px}
 <option value="newest">Recently saved first</option>
 <option value="last5">Best directional hit rate - last 5</option>
 <option value="season">Best directional hit rate - season</option>
+<option value="agreement">Strongest trend agreement</option>
 </select>
-<p class="small">Sorting uses each player's strongest saved prop in the selected period. Historical hit rates are descriptive, not win probabilities.</p>
+<p class="small">Sorting uses each player's strongest saved prop. Trend agreement compares last-5 historical results, the projection, and defense vs the NFL average. Missing or tied signals do not count. Agreement is not a win probability.</p>
 <div id="historyStatus" class="small" aria-live="polite"></div>
 <div id="historyCards"></div>
 <button id="clearHistoryButton" class="danger-button" onclick="clearHistory()" hidden>CLEAR ALL HISTORY</button>
@@ -1800,6 +1804,34 @@ function formatEdge(edge){
 return (edge>0?"+":"")+Number(edge).toFixed(2);
 }
 
+/* Saved trend agreement: no new API requests. */
+function propTrendAgreement(prop){
+ const votes=[];
+ const model=Number(prop.projection),line=Number(prop.line);
+ votes.push({name:"Model projection",direction:Number.isFinite(model)&&Number.isFinite(line)?(model>line?"OVER":model<line?"UNDER":null):null});
+ const last5=prop.hitRates?.last_5,season=prop.hitRates?.season;
+ const rate=Number(last5?.decided)>0?last5:Number(season?.decided)>0?season:null;
+ const historyLabel=rate===last5?"Last 5 hit rate":rate===season?"Season hit rate (fallback)":"Historical hit rate";
+ let hist=null;
+ if(rate){const over=Number(rate.over),under=Number(rate.under);if(Number.isFinite(over)&&Number.isFinite(under))hist=over>under?"OVER":under>over?"UNDER":null;}
+ votes.push({name:historyLabel,direction:hist});
+ const d=prop.defensive,allowed=d?.allowed==null?NaN:Number(d.allowed),league=d?.league==null?NaN:Number(d.league);
+ const def=Number.isFinite(allowed)&&Number.isFinite(league)&&league>0?(allowed>league?"OVER":allowed<league?"UNDER":null):null;
+ votes.push({name:"Opponent defense vs NFL average",direction:def});
+ const over=votes.filter(v=>v.direction==="OVER").length,under=votes.filter(v=>v.direction==="UNDER").length;
+ const available=over+under,agreeing=Math.max(over,under),winner=agreeing>=2?(over>under?"OVER":under>over?"UNDER":null):null;
+ const label=winner?agreeing+"/"+available+" "+winner:available===0?"Incomplete":available===1?"Incomplete (1/3 signals)":"Mixed / Incomplete";
+ return {votes,available,agreeing,winner,label,sortScore:winner?(agreeing===3?300:available===3?200:100):0};
+}
+function trendPanel(prop){
+ const trend=propTrendAgreement(prop),panel=document.createElement("div");panel.className="trend-panel";
+ panel.append(historyText("trend-title "+(trend.winner==="OVER"?"trend-over":trend.winner==="UNDER"?"trend-under":"trend-mixed"),"PROP TREND AGREEMENT: "+trend.label));
+ for(const vote of trend.votes)panel.append(historyText("trend-detail",(vote.direction==="OVER"?"â² OVER":vote.direction==="UNDER"?"â¼ UNDER":"â Neutral / unavailable")+" | "+vote.name));
+ panel.append(historyText("trend-detail","Agreement is descriptive, not a win probability. The model may already incorporate defense."));
+ return panel;
+}
+function bestTrendScore(record){return Math.max(0,...(record.props||[]).map(prop=>propTrendAgreement(prop).sortScore));}
+
 function renderSavedProp(prop){
 const box=document.createElement("div");
 box.className="history-prop";
@@ -1835,7 +1867,7 @@ const meta=historyText(
 " | Confidence: "+prop.confidence
 );
 
-box.append(title,numbers,meta);
+box.append(title,trendPanel(prop),numbers,meta);
 
 if(prop.defensive){
  const d=prop.defensive;
@@ -1923,6 +1955,7 @@ function bestSavedRate(record,period){
 function renderHistory(){
 const mode=$("historySort")?.value||"newest";
 const records=checkHistoryReset().sort((a,b)=>{
+ if(mode==="agreement"){const difference=bestTrendScore(b)-bestTrendScore(a);if(difference!==0)return difference;}
  if(mode==="last5"||mode==="season"){
   const period=mode==="last5"?"last_5":"season";
   const difference=bestSavedRate(b,period)-bestSavedRate(a,period);
