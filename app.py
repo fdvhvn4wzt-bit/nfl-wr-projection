@@ -435,7 +435,7 @@ def live_odds(offense_team:str,defense:str,player:str):
                 if str(outcome.get('description','')).casefold()==player.casefold() and str(outcome.get('name','')).lower()=='over' and outcome.get('point') is not None:
                     result[name][prop]={'line':outcome['point'],'over_price':outcome.get('price'),'last_update':market.get('last_update') or book.get('last_update')}
     available=any(result[b] for b in result)
-    return {'available':available,'books':result,'event':event.get('commence_time'),'updated_at':(cache[event_key][2] if cache.get(event_key) else now).isoformat(),'stale':stale,'cache_minutes':ODDS_CACHE_MINUTES,'message':('â ï¸ Showing cached odds; live refresh failed.' if stale else ('' if available else 'No matching player prop markets currently posted by DraftKings.'))}
+    return {'available':available,'books':result,'event':event.get('commence_time'),'updated_at':(cache[event_key][2] if cache.get(event_key) else now).isoformat(),'stale':stale,'cache_minutes':ODDS_CACHE_MINUTES,'message':('Ã¢ÂÂ Ã¯Â¸Â Showing cached odds; live refresh failed.' if stale else ('' if available else 'No matching player prop markets currently posted by DraftKings.'))}
 
 app.mount('/static',StaticFiles(directory='static'),name='static')
 
@@ -563,26 +563,86 @@ def weekly_candidates():
 
                     continue
 
-                score=round(max(-30,min(30,relative*100))+(5 if quality=='HIGH' else 2),1)
-                if score<=5 or abs(projected-baseline)<max(.5,baseline*.08):continue
+                direction='OVER' if relative>0 else 'UNDER'
+                # Score is magnitude of baseline deviation, not betting probability.
+                score=round(min(30,abs(relative)*100)+(5 if quality=='HIGH' else 2),1)
+                if abs(relative)<.08 or abs(projected-baseline)<.5:continue
                 reasons=[]
-                if t['last_3']>baseline*1.08:reasons.append('Recent production above season average')
-                if defense_factor>1.025:reasons.append('Opponent allows above-average production to this position')
-                if quality=='LOW':reasons.append('Limited or variable data â use caution')
-                if not reasons:reasons.append('Recent form and season baseline favor this prop')
+                if direction=='OVER':
+                    if t['last_3']>baseline*1.08:reasons.append('Recent production above season average')
+                    if defense_factor>1.025:reasons.append('Opponent allows above-average production to this position')
+                else:
+                    if t['last_3']<baseline*.92:reasons.append('Recent production below season average')
+                    if defense_factor<.975:reasons.append('Opponent allows below-average production to this position')
+                if not reasons:reasons.append('Recent form and matchup suggest '+direction+' the season baseline')
                 candidates.append({'player':str(name),'position':pos,'team':team,'opponent':opponent,
                     'prop':prop,'projection':round(projected,2),'season_average':round(baseline,2),
-                    'score':score,'confidence':quality,'reasons':reasons,'direction':'ABOVE BASELINE'})
-    # Prevent one player dominating the entire leaderboard; at most two props each.
-    candidates.sort(key=lambda x:x['score'],reverse=True)
+                    'score':score,'confidence':quality,'reasons':reasons,'direction':direction})
+    # Up to ten in each direction; at most two props per player overall.
     selected=[]; counts={}
-    for item in candidates:
-        key=(item['team'],item['player'])
-        if counts.get(key,0)>=2:continue
-        counts[key]=counts.get(key,0)+1
-        selected.append(item)
-        if len(selected)==20:break
+    for direction in ('OVER','UNDER'):
+        ranked=sorted((x for x in candidates if x['direction']==direction),
+                      key=lambda x:x['score'],reverse=True)
+        picked=0
+        for item in ranked:
+            key=(item['team'],item['player'])
+            if counts.get(key,0)>=2:continue
+            counts[key]=counts.get(key,0)+1
+            selected.append(item)
+            picked+=1
+            if picked==10:break
     return selected,len(games)//2
+
+
+# Historical OVER / UNDER hit rates against a user-entered line.
+# Uses completed regular-season player game logs; never calls an odds provider.
+HISTORY_STAT_COLUMNS = {
+    'receiving_yards': ['receiving_yards', 'rec_yards'],
+    'receptions': ['receptions'],
+    'rushing_yards': ['rushing_yards', 'rush_yards'],
+    'rushing_attempts': ['carries', 'rushing_attempts', 'rush_attempts'],
+    'passing_yards': ['passing_yards', 'pass_yards'],
+    'passing_attempts': ['attempts', 'passing_attempts'],
+    'passing_completions': ['completions', 'passing_completions'],
+    'passing_touchdowns': ['passing_tds', 'passing_touchdowns', 'pass_tds'],
+    'interceptions': ['interceptions', 'passing_interceptions'],
+}
+
+def hit_rate_window(values, line):
+    over=sum(x>line for x in values)
+    under=sum(x<line for x in values)
+    pushes=len(values)-over-under
+    decided=over+under
+    return {'games':len(values), 'over':over, 'under':under, 'pushes':pushes,
+            'decided':decided,
+            'over_pct':round(100*over/decided,1) if decided else None,
+            'under_pct':round(100*under/decided,1) if decided else None}
+
+@app.get('/api/historical-hit-rates')
+def historical_hit_rates(team:str, player_name:str, prop:str, line:float):
+    team=team.upper().strip()
+    if team not in NFL_TEAMS:raise HTTPException(400,'Invalid team.')
+    if prop not in HISTORY_STAT_COLUMNS:raise HTTPException(400,'Unsupported prop.')
+    if not math.isfinite(line) or line<0:raise HTTPException(400,'Invalid line.')
+    df=stats()
+    p=player(df,player_name,team)
+    if p.empty:raise HTTPException(404,'No completed games for this player.')
+    wc=column(p,['week'])
+    sc=column(p,HISTORY_STAT_COLUMNS[prop])
+    if not wc or not sc:raise HTTPException(503,'Historical stat field unavailable.')
+    p=p.copy()
+    p['_week']=pd.to_numeric(p[wc],errors='coerce')
+    p['_value']=pd.to_numeric(p[sc],errors='coerce')
+    p=p.dropna(subset=['_week','_value'])
+    p=p[p['_value']>=0]
+    # If a data source repeats a player/week, aggregate that week's stats.
+    weekly=p.groupby('_week',as_index=False)['_value'].sum().sort_values('_week')
+    values=weekly['_value'].astype(float).tolist()
+    return {'player':player_name,'team':team,'prop':prop,'line':line,
+            'last_3':hit_rate_window(values[-3:],line),
+            'last_5':hit_rate_window(values[-5:],line),
+            'season':hit_rate_window(values,line),
+            'note':'Over/under percentages exclude pushes from the denominator. Only recorded games are counted.'}
 
 @app.get('/api/weekly-top20')
 def weekly_top20():
@@ -855,4 +915,3 @@ def defense_touchdowns(defense: str, position: str):
             "per game to this position."
         ),
     }
-
