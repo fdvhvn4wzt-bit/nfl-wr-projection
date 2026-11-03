@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -327,6 +326,13 @@ body{padding:12px}
 <p class="small">Your personal DraftKings decision shortlist. Each saved player contains only props with available lines.</p>
 <p class="history-note">SAVED SNAPSHOTS - NOT LIVE ODDS. Verify the current DraftKings line before placing a wager.</p>
 <p class="small">Automatically clears every Tuesday at 6:00 AM Hawaii time when the dashboard is next opened or used.</p>
+<label for="historySort">Sort saved players</label>
+<select id="historySort" onchange="renderHistory()">
+<option value="newest">Recently saved first</option>
+<option value="last5">Best directional hit rate - last 5</option>
+<option value="season">Best directional hit rate - season</option>
+</select>
+<p class="small">Sorting uses each player's strongest saved prop in the selected period. Historical hit rates are descriptive, not win probabilities.</p>
 <div id="historyStatus" class="small" aria-live="polite"></div>
 <div id="historyCards"></div>
 <button id="clearHistoryButton" class="danger-button" onclick="clearHistory()" hidden>CLEAR ALL HISTORY</button>
@@ -1665,7 +1671,7 @@ button.classList.remove("saved");
 
 /* SAVE PLAYER BUTTON */
 
-function savePlayer(kind){
+async function savePlayer(kind){
 checkHistoryReset();
 
 const name=kind==="receiving"?"Receiving":kind==="rushing"?"Rushing":"Qb";
@@ -1686,6 +1692,19 @@ return;
 }
 
 try{
+button.disabled=true;
+message.textContent="Saving prop lines and historical game results...";
+// Snapshot rates for each saved line, whether manual or DraftKings.
+// Only completed game logs are queried; no Odds API requests.
+await Promise.all(snapshot.props.map(async prop=>{
+ try{
+  const params=new URLSearchParams({team:snapshot.offense,player_name:snapshot.player,prop:prop.key,line:String(prop.line)});
+  const result=await jsonFetch("/api/historical-hit-rates?"+params);
+  prop.hitRates={last_3:result.last_3,last_5:result.last_5,season:result.season};
+ }catch(error){
+  prop.hitRatesError="Historical results unavailable: "+error.message;
+ }
+}));
 const records=checkHistoryReset();
 
 /*
@@ -1711,6 +1730,8 @@ snapshot.props.length+" prop"+
 }catch(error){
 message.textContent=
 "Could not save. Check that Safari website storage is enabled.";
+}finally{
+button.disabled=false;
 }
 }
 
@@ -1775,6 +1796,25 @@ const meta=historyText(
 
 box.append(title,numbers,meta);
 
+if(prop.hitRates){
+ const heading=historyText("history-meta","Historical results vs saved line "+prop.line+" (snapshot)");
+ box.append(heading);
+ for(const [key,label] of [["last_3","Last 3"],["last_5","Last 5"],["season","Season"]]){
+  const rate=prop.hitRates[key];
+  if(!rate)continue;
+  const decided=Number(rate.decided)||0;
+  const direction=prop.lean==="UNDER"?"UNDER":"OVER";
+  const hits=direction==="UNDER"?rate.under:rate.over;
+  const pct=direction==="UNDER"?rate.under_pct:rate.over_pct;
+  const percent=pct==null?"N/A":Number(pct).toFixed(1)+"%";
+  box.append(historyText("history-meta",label+": "+direction+" "+hits+"/"+decided+" ("+percent+") | OVER "+rate.over+" | UNDER "+rate.under+" | Pushes "+rate.pushes+" | Games "+rate.games));
+ }
+}else if(prop.hitRatesError){
+ box.append(historyText("history-meta",prop.hitRatesError));
+}else{
+ box.append(historyText("history-meta","Historical rates not saved with this older pick. Save the player again to add them."));
+}
+
 if(prop.source==="DraftKings"){
 const oddsParts=[];
 
@@ -1809,10 +1849,25 @@ return box;
 
 /* RENDER HISTORY WITHOUT NETWORK REQUESTS */
 
+function savedDirectionalRate(prop,period){
+ const rate=prop.hitRates?.[period];
+ if(!rate||!Number(rate.decided)||!["OVER","UNDER"].includes(prop.lean))return -1;
+ const pct=prop.lean==="UNDER"?rate.under_pct:rate.over_pct;
+ return pct==null?-1:Number(pct);
+}
+function bestSavedRate(record,period){
+ return Math.max(-1,...(record.props||[]).map(prop=>savedDirectionalRate(prop,period)));
+}
 function renderHistory(){
-const records=checkHistoryReset().sort(
-(a,b)=>Number(b.savedAt)-Number(a.savedAt)
-);
+const mode=$("historySort")?.value||"newest";
+const records=checkHistoryReset().sort((a,b)=>{
+ if(mode==="last5"||mode==="season"){
+  const period=mode==="last5"?"last_5":"season";
+  const difference=bestSavedRate(b,period)-bestSavedRate(a,period);
+  if(difference!==0)return difference;
+ }
+ return Number(b.savedAt)-Number(a.savedAt);
+});
 
 const root=$("historyCards");
 root.replaceChildren();
