@@ -1494,9 +1494,48 @@ return {entry:manual,source:"Manual"};
 return null;
 }
 
+/* DEFENSIVE MATCHUP SNAPSHOT FOR SAVED PROPS */
+function defensiveSnapshot(kind,data,key){
+ const result={label:"",allowed:null,league:null,games:0,note:""};
+ if(kind==="receiving"){
+  result.games=data.position_defense_games??0;
+  if(key==="receiving_yards"){
+   const position=$("receiver").selectedOptions[0]?.dataset.position||"WR/TE";
+   result.label="Opponent yards allowed to "+position+" (all players at position / game)";
+   result.allowed=data.position_defense_yards_allowed;
+   result.league=data.league_position_yards_allowed;
+  }else{
+   result.note="Position-specific receptions allowed not available from this projection.";
+  }
+ }else if(kind==="rushing"){
+  if(key==="rushing_yards"){
+   result.label="Opponent rushing yards allowed to RBs (all RBs / game)";
+   result.allowed=data.position_defense_yards_allowed;
+   result.league=data.league_position_yards_allowed;
+   result.games=data.position_defense_games??0;
+  }else if(key==="receiving_yards"||key==="receptions"){
+   const d=data.rb_receiving_defense||{};
+   result.label=key==="receiving_yards"?"Opponent RB receiving yards allowed (all RBs / game)":"Opponent RB receptions allowed (all RBs / game)";
+   result.allowed=key==="receiving_yards"?d.yards:d.receptions;
+   result.league=key==="receiving_yards"?d.league_yards:d.league_receptions;
+   result.games=d.games??0;
+  }else{
+   result.note="RB rushing attempts allowed not available from this projection.";
+  }
+ }else if(kind==="qb"){
+  const d=data.defense_matchup||{};
+  const field=key==="rushing_yards"?"qb_rushing_yards":key==="rushing_attempts"?"qb_rushing_attempts":key;
+  result.label="Opponent "+key.replaceAll("_"," ")+" allowed to QBs (per game)";
+  result.allowed=d.allowed?.[field];
+  result.league=d.league?.[field];
+  result.games=d.games??0;
+ }
+ return result;
+}
+
 /* BUILD ONE SAVED PROP */
 
-function savedProp(key,label,unit,projection,choice,confidence,fetchedAt){
+function savedProp(key,label,unit,projection,choice,confidence,fetchedAt,defensive){
 if(!choice)return null;
 
 const projected=Number(projection);
@@ -1522,7 +1561,8 @@ confidence:confidence||"-",
 overPrice:choice.entry.over_price??null,
 underPrice:choice.entry.under_price??null,
 bookUpdatedAt:choice.entry.last_update??null,
-fetchedAt:choice.source==="DraftKings"?fetchedAt:null
+fetchedAt:choice.source==="DraftKings"?fetchedAt:null,
+defensive:defensive||null
 };
 }
 
@@ -1637,7 +1677,8 @@ item.unit,
 item.projection,
 item.choice,
 item.confidence,
-item.fetchedAt
+item.fetchedAt,
+defensiveSnapshot(kind,data,item.key)
 ))
 .filter(Boolean);
 
@@ -1795,6 +1836,27 @@ const meta=historyText(
 );
 
 box.append(title,numbers,meta);
+
+if(prop.defensive){
+ const d=prop.defensive;
+ box.append(historyText("history-meta","DEFENSIVE MATCHUP (snapshot)"));
+ if(d.allowed!=null&&Number.isFinite(Number(d.allowed))){
+  const opponent=Number(d.allowed);
+  const league=d.league==null?null:Number(d.league);
+  let summary=d.label+": "+opponent.toFixed(2);
+  if(league!=null&&Number.isFinite(league)){
+   summary+=" | NFL avg: "+league.toFixed(2);
+   if(league>0)summary+=" | "+((opponent/league-1)*100).toFixed(1)+"% vs NFL avg";
+  }
+  summary+=" | Sample: "+d.games+" games";
+  box.append(historyText("history-meta",summary));
+  box.append(historyText("history-meta","These are opponent defensive averages across the position, not the hit rate against your individual prop line."));
+ }else{
+  box.append(historyText("history-meta",d.note||"Defensive matchup data unavailable for this prop."));
+ }
+}else{
+ box.append(historyText("history-meta","Defensive snapshot not saved with this older pick. Save the player again to add it."));
+}
 
 if(prop.hitRates){
  const heading=historyText("history-meta","Historical results vs saved line "+prop.line+" (snapshot)");
