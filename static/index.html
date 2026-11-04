@@ -84,6 +84,26 @@ body{padding:12px}
 .an .small{margin:6px 0 0}
 .an-ev{font-weight:750;margin-top:6px}
 .bad{color:#fca5a5}
+/* SAVED RATINGS */
+.rating-banner{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px;padding:9px 10px;border-radius:10px;background:#111c2e}
+.rating-text{font-weight:700;font-size:13px;overflow-wrap:anywhere}
+.chip.rate-play{background:#15803d;color:#fff}
+.chip.rate-lean{background:#b45309;color:#fff}
+.chip.rate-pass{background:#334155;color:#cbd5e1}
+.chip.rate-none{background:#1e293b;color:#94a3b8}
+.history-prop.rated-play{border-left:4px solid #22c55e;padding-left:10px}
+.history-prop.rated-lean{border-left:4px solid #f59e0b;padding-left:10px}
+.history-card.rated-card-play{border-left:6px solid #22c55e}
+.history-card.rated-card-lean{border-left:6px solid #f59e0b}
+.bet-slip{margin:10px 0;padding:10px;border-radius:10px;background:#111c2e}
+.slip-summary{margin-bottom:6px}
+.slip-row{display:flex;align-items:flex-start;gap:6px;margin-top:6px;font-weight:700;font-size:13px}
+.slip-row span:last-child{overflow-wrap:anywhere}
+/* GAME PICKER */
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg button{background:#26364e;margin-top:10px}
+.seg button.on{background:#3b82f6}
+#gameNote{margin:10px 0 4px}
 </style>
 </head>
 <body>
@@ -104,6 +124,14 @@ body{padding:12px}
 
 <div class="card" id="matchupSelector">
 <h2>1. Select Matchup</h2>
+<label for="gamePicker">Pick a Game</label>
+<select id="gamePicker"><option value="">Loading games...</option></select>
+<div id="gameSide" class="seg" hidden>
+<button type="button" id="sideAway"></button>
+<button type="button" id="sideHome"></button>
+</div>
+<p class="small" id="gameNote"></p>
+<p class="small">Or choose any two teams manually:</p>
 <label>Offense Team</label>
 <select id="offense"></select>
 <label>Opposing Defense</label>
@@ -343,7 +371,15 @@ body{padding:12px}
 <option value="last5">Best directional hit rate - last 5</option>
 <option value="season">Best directional hit rate - season</option>
 <option value="agreement">Strongest trend agreement</option>
+<option value="rating">Best rating (PLAY first)</option>
 </select>
+<label for="historyFilter">Show</label>
+<select id="historyFilter" onchange="renderHistory()">
+<option value="all">All saved props</option>
+<option value="playlean">PLAY and LEAN only</option>
+<option value="play">PLAY only</option>
+</select>
+<p class="small">Ratings are snapshots from the moment you saved. Re-check the live DraftKings line and injury status before betting.</p>
 <p class="small">Sorting uses each player's strongest saved prop in the selected period. Trend agreement counts how many of Model, Last-5 History and Defense point the same way. Historical hit rates are descriptive, not win probabilities.</p>
 <div id="historyStatus" class="small" aria-live="polite"></div>
 <div id="historyCards"></div>
@@ -2311,6 +2347,7 @@ content:`
 <p><strong>Expected value (EV)</strong> is the average profit per $1 if the model's probability were exactly right. +5% means about 5 cents per dollar over many bets.</p>
 <p><strong>PLAY</strong>: EV of at least +5%, a 4+ point probability edge and decent data. <strong>LEAN</strong>: EV of at least +2%. <strong>PASS</strong>: not enough edge.</p>
 <p><strong>Stake</strong> is quarter-Kelly, capped at 1.5% of bankroll.</p>
+<p><strong>In Saved Edges</strong>, the final PLAY / LEAN / PASS combines this EV rating with Trend Agreement. The EV rating is the starting point, and each other signal (model, last-5 hit rate, defense) that points the opposite way lowers it one step. It is never raised.</p>
 <p><strong>Important:</strong> These are estimates, not guarantees. Injuries, role changes and game script can move results. Prop markets are efficient, so treat this as a research tool and bet small.</p>`
 };
 
@@ -2585,7 +2622,7 @@ box.append(historyText("history-meta",
 "Probability snapshot: OVER "+pctText(a.prob_over)+" | UNDER "+pctText(a.prob_under)+
 " | Market (no-vig) "+a.side+" "+pctText(a.side_fair)));
 box.append(historyText("history-meta",
-"Rating "+a.rating+" "+a.side+" | EV "+(a.ev>0?"+":"")+(a.ev*100).toFixed(1)+"%"+
+"EV rating (before agreement check): "+a.rating+" "+a.side+" | EV "+(a.ev>0?"+":"")+(a.ev*100).toFixed(1)+"%"+
 (a.stake_pct>0?" | Stake "+a.stake_pct.toFixed(2)+"% of bankroll":"")));
 }
 return box;
@@ -2656,11 +2693,56 @@ function trendHistorySignal(prop) {
     return null;
 }
 
+/* EV rating folded into the agreement: PLAY/LEAN votes for its side. */
+function trendValueSignal(prop) {
+    const a = prop.analysis;
+    if (!a) return null;
+    const rated = a.rating === "PLAY" || a.rating === "LEAN";
+    return rated && (a.side === "OVER" || a.side === "UNDER") ? a.side : null;
+}
+
+/* Final grade = EV rating, lowered one step for each other signal
+   (model, last-5 hit rate, defense) that points the opposite way.
+   Never raised above the EV rating. */
+function finalGrade(prop) {
+    const a = prop.analysis;
+    if (!a) return {grade: "NONE", evRating: "NONE", reasons: []};
+
+    const order = ["PASS", "LEAN", "PLAY"];
+    let index = order.indexOf(a.rating);
+    if (index < 0) index = 0;
+
+    const reasons = [];
+    if (index > 0) {
+        const checks = [
+            ["model", trendDirection(prop.projection, prop.line)],
+            ["last-5 hit rate", trendHistorySignal(prop)],
+            ["defense", prop.trendDefense || null]
+        ];
+        for (const [name, direction] of checks) {
+            if ((direction === "OVER" || direction === "UNDER") &&
+                direction !== a.side) {
+                index -= 1;
+                reasons.push(name + " points " + direction);
+                if (index === 0) break;
+            }
+        }
+    }
+
+    return {grade: order[index], evRating: a.rating, reasons};
+}
+
 function calculateTrendAgreement(prop) {
     const signals = [
         ["Model", trendDirection(prop.projection, prop.line)],
         ["History", trendHistorySignal(prop)],
-        ["Defense", prop.trendDefense || null]
+        ["Defense", prop.trendDefense || null],
+        ["Value (EV)", trendValueSignal(prop),
+            prop.analysis
+                ? prop.analysis.rating + ", EV " +
+                  (prop.analysis.ev > 0 ? "+" : "") +
+                  (prop.analysis.ev * 100).toFixed(1) + "%"
+                : ""]
     ];
 
     const available = signals.filter(([, direction]) =>
@@ -2733,16 +2815,34 @@ renderSavedProp = function(prop) {
 
     box.append(heading);
 
-    for (const [name, direction] of agreement.signals) {
+    for (const [name, direction, detail] of agreement.signals) {
         box.append(historyText(
             "history-meta",
-            name + ": " + (direction || "UNAVAILABLE")
+            name + ": " + (direction || "UNAVAILABLE") +
+            (detail ? " (" + detail + ")" : "")
         ));
+    }
+
+    const grade = finalGrade(prop);
+    if (grade.grade !== "NONE") {
+        const gradeLine = historyText(
+            "history-prop-title",
+            "FINAL GRADE: " + grade.grade +
+            (grade.grade !== grade.evRating
+                ? " (EV said " + grade.evRating + "; lowered because " +
+                  grade.reasons.join(" and ") + ")"
+                : "")
+        );
+        gradeLine.style.marginTop = "10px";
+        gradeLine.style.color =
+            grade.grade === "PLAY" ? "#86efac" :
+            grade.grade === "LEAN" ? "#fcd34d" : "#cbd5e1";
+        box.append(gradeLine);
     }
 
     box.append(historyText(
         "history-meta",
-        "Agreement uses available signals only. " +
+        "Agreement uses available signals only. The grade is the EV rating, lowered one step for each opposing signal. " +
         "Historical results are not win probabilities."
     ));
 
@@ -2853,6 +2953,438 @@ renderHistory = function() {
         root.append(card);
     }
 };
+
+
+
+/* ==========================================
+   SAVED EDGES: PLAY / LEAN / PASS AT A GLANCE
+   Rating banner on every saved prop, bet-slip summary on each
+   player card, filter and sort. Uses the rating saved with each prop.
+   ========================================== */
+
+const RATING_RANK = {PLAY: 3, LEAN: 2, PASS: 1, NONE: 0};
+
+function savedRating(prop) {
+    const grade = prop && prop.analysis ? finalGrade(prop).grade : "NONE";
+    return RATING_RANK[grade] ? grade : "NONE";
+}
+
+function ratingChip(rating, text) {
+    const chip = document.createElement("span");
+    chip.className = "chip rate-" + rating.toLowerCase();
+    chip.textContent = text || rating;
+    return chip;
+}
+
+function evText(a) {
+    const value = Number(a.ev) * 100;
+    return "EV " + (value > 0 ? "+" : "") + value.toFixed(1) + "%";
+}
+
+function priceText(a) {
+    if (a.side_price == null) return "";
+    const price = Number(a.side_price);
+    return " (" + (price > 0 ? "+" : "") + price + ")";
+}
+
+const renderSavedPropBeforeRating = renderSavedProp;
+
+renderSavedProp = function(prop) {
+    const box = renderSavedPropBeforeRating(prop);
+    const rating = savedRating(prop);
+    const a = prop.analysis;
+
+    box.dataset.rating = rating;
+    box.dataset.ev = a ? String(Number(a.ev) || 0) : "-9";
+    box.classList.add("rated-" + rating.toLowerCase());
+
+    const banner = document.createElement("div");
+    banner.className = "rating-banner";
+
+    if (a) {
+        const grade = finalGrade(prop);
+        const lowered = grade.grade !== grade.evRating;
+        const stake = rating !== "PASS" && Number(a.stake_pct) > 0
+            ? " | Stake " + Number(a.stake_pct).toFixed(2) + "%" : "";
+
+        banner.append(ratingChip(rating));
+        const text = document.createElement("span");
+        text.className = "rating-text";
+        text.textContent =
+            a.side + " " + a.line + priceText(a) + " | " + evText(a) +
+            " | " + Math.round(Number(a.side_prob) * 100) + "% chance" + stake;
+        banner.append(text);
+
+        if (lowered) {
+            const why = document.createElement("div");
+            why.className = "history-meta";
+            why.style.width = "100%";
+            why.textContent =
+                "EV said " + grade.evRating + ", lowered to " + grade.grade +
+                ": " + grade.reasons.join(" and ") + ".";
+            banner.append(why);
+        }
+
+        box.dataset.slip =
+            a.side + " " + a.line + " " + prop.label + priceText(a) +
+            " | " + evText(a) + stake +
+            (lowered ? " | lowered from " + grade.evRating : "");
+    } else {
+        banner.append(ratingChip("NONE", "NO RATING"));
+        const text = document.createElement("span");
+        text.className = "rating-text";
+        text.textContent =
+            "Saved without a rating (no line or odds at save time).";
+        banner.append(text);
+        box.dataset.slip = "";
+    }
+
+    box.prepend(banner);
+    return box;
+};
+
+function decorateSavedHistory() {
+    const root = $("historyCards");
+    if (!root) return;
+
+    const filter = $("historyFilter") ? $("historyFilter").value : "all";
+    const mode = $("historySort") ? $("historySort").value : "newest";
+    const minimum = filter === "play" ? 3 : filter === "playlean" ? 2 : 0;
+
+    const cards = Array.from(root.querySelectorAll(":scope > .history-card"));
+    const info = new Map();
+    let visibleCards = 0;
+
+    cards.forEach((card, order) => {
+        const boxes = Array.from(card.querySelectorAll(".history-prop"));
+        const counts = {PLAY: 0, LEAN: 0, PASS: 0, NONE: 0};
+        let bestRank = 0;
+        let bestEv = -9;
+        let visible = 0;
+
+        for (const box of boxes) {
+            const rating = box.dataset.rating || "NONE";
+            counts[rating] += 1;
+            const rank = RATING_RANK[rating];
+            if (rank > bestRank) bestRank = rank;
+            if (rank >= 2) bestEv = Math.max(bestEv, Number(box.dataset.ev));
+
+            const show = minimum === 0 || rank >= minimum;
+            box.hidden = !show;
+            if (show) visible += 1;
+        }
+
+        const bestName = bestRank === 3 ? "play" :
+                         bestRank === 2 ? "lean" :
+                         bestRank === 1 ? "pass" : "none";
+        card.classList.add("rated-card", "rated-card-" + bestName);
+
+        const slip = document.createElement("div");
+        slip.className = "bet-slip";
+
+        const summary = document.createElement("div");
+        summary.className = "slip-summary";
+        if (counts.PLAY) summary.append(ratingChip("PLAY", "PLAY " + counts.PLAY));
+        if (counts.LEAN) summary.append(ratingChip("LEAN", "LEAN " + counts.LEAN));
+        if (counts.PASS) summary.append(ratingChip("PASS", "PASS " + counts.PASS));
+        if (counts.NONE) summary.append(ratingChip("NONE", "UNRATED " + counts.NONE));
+        slip.append(summary);
+
+        const betBoxes = boxes
+            .filter(box => RATING_RANK[box.dataset.rating] >= 2)
+            .sort((x, y) =>
+                RATING_RANK[y.dataset.rating] - RATING_RANK[x.dataset.rating] ||
+                Number(y.dataset.ev) - Number(x.dataset.ev));
+
+        for (const box of betBoxes) {
+            const row = document.createElement("div");
+            row.className = "slip-row";
+            row.append(ratingChip(box.dataset.rating));
+            const text = document.createElement("span");
+            text.textContent = box.dataset.slip;
+            row.append(text);
+            slip.append(row);
+        }
+
+        if (!betBoxes.length) {
+            const none = document.createElement("div");
+            none.className = "history-meta";
+            none.textContent = "No PLAY or LEAN props saved for this player.";
+            slip.append(none);
+        }
+
+        const actions = card.querySelector(".history-actions");
+        card.insertBefore(slip, actions);
+
+        const show = minimum === 0 || visible > 0;
+        card.hidden = !show;
+        if (show) visibleCards += 1;
+        info.set(card, {order, bestRank, bestEv});
+    });
+
+    if (mode === "rating") {
+        cards
+            .slice()
+            .sort((x, y) => {
+                const a = info.get(x);
+                const b = info.get(y);
+                return b.bestRank - a.bestRank ||
+                       b.bestEv - a.bestEv ||
+                       a.order - b.order;
+            })
+            .forEach(card => root.append(card));
+    }
+
+    const status = $("historyStatus");
+    if (status && minimum > 0 && cards.length) {
+        status.textContent +=
+            " | Showing " + visibleCards + " player" +
+            (visibleCards === 1 ? "" : "s") + " matching filter";
+    }
+
+    if (minimum > 0 && cards.length && visibleCards === 0) {
+        const empty = document.createElement("p");
+        empty.className = "small";
+        empty.textContent =
+            "No saved props match this filter. Choose \"All saved props\" to see everything.";
+        root.append(empty);
+    }
+}
+
+const renderHistoryBeforeRating = renderHistory;
+
+renderHistory = function() {
+    renderHistoryBeforeRating();
+    decorateSavedHistory();
+};
+
+
+
+/* ==========================================
+   GAME PICKER
+   One dropdown of real games (upcoming and played), grouped by week.
+   Fills the Offense / Defense menus below and stays in sync with them.
+   ========================================== */
+
+let gameList = [];
+let currentWeek = null;
+let selectedGame = null;
+let gamesLoadedAt = 0;
+const GAME_KEY = "nfl_last_game";
+
+function gameTimeText(iso) {
+    if (!iso) return "";
+    try {
+        return new Date(iso).toLocaleString("en-US", {
+            timeZone: "Pacific/Honolulu",
+            weekday: "short",
+            hour: "numeric",
+            minute: "2-digit"
+        }) + " HST";
+    } catch (error) {
+        return "";
+    }
+}
+
+function gameLabel(game) {
+    if (game.status === "final") {
+        return game.away + " " + game.away_score + " @ " +
+               game.home + " " + game.home_score + " - Final";
+    }
+    const time = gameTimeText(game.kickoff);
+    return game.away + " @ " + game.home +
+           (time ? " - " + time : "") +
+           (game.status === "started" ? " (started)" : "");
+}
+
+function gameId(game) {
+    return game.week + "-" + game.away + "-" + game.home;
+}
+
+function buildGamePicker() {
+    const select = $("gamePicker");
+    select.replaceChildren(new Option(
+        gameList.length ? "Choose a game..." : "No games found - use the team menus below",
+        ""
+    ));
+
+    const weeks = {};
+    gameList.forEach((game, index) => {
+        (weeks[game.week] = weeks[game.week] || []).push(index);
+    });
+
+    const all = Object.keys(weeks).map(Number);
+    const hasCurrent = currentWeek != null;
+    const later = hasCurrent ? all.filter(w => w > currentWeek).sort((a, b) => a - b) : [];
+    const earlier = (hasCurrent ? all.filter(w => w < currentWeek) : all).sort((a, b) => b - a);
+    const order = [];
+    if (hasCurrent && weeks[currentWeek]) order.push(currentWeek);
+    order.push(...later, ...earlier);
+
+    for (const week of order) {
+        const group = document.createElement("optgroup");
+        group.label =
+            hasCurrent && week === currentWeek ? "THIS WEEK - Week " + week :
+            hasCurrent && week > currentWeek ? "UPCOMING - Week " + week :
+            "PLAYED - Week " + week;
+        for (const index of weeks[week]) {
+            group.append(new Option(gameLabel(gameList[index]), String(index)));
+        }
+        select.append(group);
+    }
+}
+
+function showGameDetails(game, side) {
+    const sideBox = $("gameSide");
+    const note = $("gameNote");
+
+    if (!game) {
+        sideBox.hidden = true;
+        note.textContent = "";
+        note.style.color = "";
+        return;
+    }
+
+    sideBox.hidden = false;
+    $("sideAway").textContent = game.away + " offense";
+    $("sideHome").textContent = game.home + " offense";
+    $("sideAway").classList.toggle("on", side === "away");
+    $("sideHome").classList.toggle("on", side === "home");
+
+    if (game.status === "final") {
+        note.textContent =
+            "Look-back: this game is final (" + game.away + " " + game.away_score + ", " +
+            game.home + " " + game.home_score + "). Projections use the season data available " +
+            "now, which already includes this game, so they are not a true pre-game prediction.";
+        note.style.color = "#fde68a";
+    } else if (game.status === "started") {
+        note.textContent =
+            "This game has kicked off. Sportsbook lines are usually closed and its stats are not in yet.";
+        note.style.color = "#fde68a";
+    } else {
+        note.textContent = "Week " + game.week + " | Kickoff " + gameTimeText(game.kickoff);
+        note.style.color = "";
+    }
+}
+
+function applyGame(game, side) {
+    if (!game) return;
+    selectedGame = game;
+    const offense = side === "home" ? game.home : game.away;
+    const defense = side === "home" ? game.away : game.home;
+
+    $("offense").value = offense;
+    $("defense").value = defense;
+    showGameDetails(game, side);
+
+    try {
+        localStorage.setItem(GAME_KEY, JSON.stringify({id: gameId(game), side}));
+    } catch (error) {}
+
+    resetProjections();
+    loadRoster();
+}
+
+function syncGamePicker() {
+    const offense = $("offense").value;
+    const defense = $("defense").value;
+    const select = $("gamePicker");
+
+    const matches = [];
+    gameList.forEach((game, index) => {
+        if ((game.away === offense && game.home === defense) ||
+            (game.home === offense && game.away === defense)) {
+            matches.push(index);
+        }
+    });
+
+    if (!offense || !defense || !matches.length) {
+        select.value = "";
+        selectedGame = null;
+        showGameDetails(null);
+        return;
+    }
+
+    const pick =
+        matches.find(i => gameList[i].week === currentWeek) ??
+        matches.find(i => gameList[i].status === "upcoming") ??
+        matches[matches.length - 1];
+
+    selectedGame = gameList[pick];
+    select.value = String(pick);
+    showGameDetails(selectedGame, selectedGame.away === offense ? "away" : "home");
+}
+
+function currentSide() {
+    return selectedGame && $("offense").value === selectedGame.home ? "home" : "away";
+}
+
+async function loadGames(quiet) {
+    const select = $("gamePicker");
+    try {
+        const data = await jsonFetch("/api/matchups");
+        gameList = data.games || [];
+        currentWeek = data.current_week == null ? null : Number(data.current_week);
+
+        for (let waited = 0; waited < 8000 && $("offense").options.length <= 1; waited += 100) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        buildGamePicker();
+        gamesLoadedAt = Date.now();
+
+        if (quiet) {
+            syncGamePicker();
+            return;
+        }
+
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(GAME_KEY) || "null"); } catch (error) {}
+        if (saved && !$("offense").value) {
+            const index = gameList.findIndex(game => gameId(game) === saved.id);
+            if (index >= 0) {
+                select.value = String(index);
+                applyGame(gameList[index], saved.side === "home" ? "home" : "away");
+            }
+        } else {
+            syncGamePicker();
+        }
+    } catch (error) {
+        if (!quiet) {
+            select.replaceChildren(new Option("Games unavailable - use the team menus below", ""));
+        }
+    }
+}
+
+$("gamePicker").addEventListener("change", () => {
+    const value = $("gamePicker").value;
+    if (value === "") {
+        selectedGame = null;
+        showGameDetails(null);
+        return;
+    }
+    applyGame(gameList[Number(value)], "away");
+});
+
+$("sideAway").addEventListener("click", () => applyGame(selectedGame, "away"));
+$("sideHome").addEventListener("click", () => applyGame(selectedGame, "home"));
+
+/* Keep the picker in step when teams are changed by hand or from Top Picks. */
+$("offense").addEventListener("change", syncGamePicker);
+$("defense").addEventListener("change", syncGamePicker);
+
+const viewWeeklyPlayerBeforePicker = viewWeeklyPlayer;
+viewWeeklyPlayer = async function(player) {
+    await viewWeeklyPlayerBeforePicker(player);
+    syncGamePicker();
+};
+
+/* Refresh scores and kickoff status when returning to the app after a while. */
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && Date.now() - gamesLoadedAt > 600000) loadGames(true);
+});
+
+loadGames(false);
 
 
 </script>
