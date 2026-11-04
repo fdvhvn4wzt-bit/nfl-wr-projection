@@ -99,6 +99,11 @@ body{padding:12px}
 .slip-summary{margin-bottom:6px}
 .slip-row{display:flex;align-items:flex-start;gap:6px;margin-top:6px;font-weight:700;font-size:13px}
 .slip-row span:last-child{overflow-wrap:anywhere}
+/* GAME PICKER */
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg button{background:#26364e;margin-top:10px}
+.seg button.on{background:#3b82f6}
+#gameNote{margin:10px 0 4px}
 </style>
 </head>
 <body>
@@ -119,6 +124,14 @@ body{padding:12px}
 
 <div class="card" id="matchupSelector">
 <h2>1. Select Matchup</h2>
+<label for="gamePicker">Pick a Game</label>
+<select id="gamePicker"><option value="">Loading games...</option></select>
+<div id="gameSide" class="seg" hidden>
+<button type="button" id="sideAway"></button>
+<button type="button" id="sideHome"></button>
+</div>
+<p class="small" id="gameNote"></p>
+<p class="small">Or choose any two teams manually:</p>
 <label>Offense Team</label>
 <select id="offense"></select>
 <label>Opposing Defense</label>
@@ -3144,6 +3157,234 @@ renderHistory = function() {
     renderHistoryBeforeRating();
     decorateSavedHistory();
 };
+
+
+
+/* ==========================================
+   GAME PICKER
+   One dropdown of real games (upcoming and played), grouped by week.
+   Fills the Offense / Defense menus below and stays in sync with them.
+   ========================================== */
+
+let gameList = [];
+let currentWeek = null;
+let selectedGame = null;
+let gamesLoadedAt = 0;
+const GAME_KEY = "nfl_last_game";
+
+function gameTimeText(iso) {
+    if (!iso) return "";
+    try {
+        return new Date(iso).toLocaleString("en-US", {
+            timeZone: "Pacific/Honolulu",
+            weekday: "short",
+            hour: "numeric",
+            minute: "2-digit"
+        }) + " HST";
+    } catch (error) {
+        return "";
+    }
+}
+
+function gameLabel(game) {
+    if (game.status === "final") {
+        return game.away + " " + game.away_score + " @ " +
+               game.home + " " + game.home_score + " - Final";
+    }
+    const time = gameTimeText(game.kickoff);
+    return game.away + " @ " + game.home +
+           (time ? " - " + time : "") +
+           (game.status === "started" ? " (started)" : "");
+}
+
+function gameId(game) {
+    return game.week + "-" + game.away + "-" + game.home;
+}
+
+function buildGamePicker() {
+    const select = $("gamePicker");
+    select.replaceChildren(new Option(
+        gameList.length ? "Choose a game..." : "No games found - use the team menus below",
+        ""
+    ));
+
+    const weeks = {};
+    gameList.forEach((game, index) => {
+        (weeks[game.week] = weeks[game.week] || []).push(index);
+    });
+
+    const all = Object.keys(weeks).map(Number);
+    const hasCurrent = currentWeek != null;
+    const later = hasCurrent ? all.filter(w => w > currentWeek).sort((a, b) => a - b) : [];
+    const earlier = (hasCurrent ? all.filter(w => w < currentWeek) : all).sort((a, b) => b - a);
+    const order = [];
+    if (hasCurrent && weeks[currentWeek]) order.push(currentWeek);
+    order.push(...later, ...earlier);
+
+    for (const week of order) {
+        const group = document.createElement("optgroup");
+        group.label =
+            hasCurrent && week === currentWeek ? "THIS WEEK - Week " + week :
+            hasCurrent && week > currentWeek ? "UPCOMING - Week " + week :
+            "PLAYED - Week " + week;
+        for (const index of weeks[week]) {
+            group.append(new Option(gameLabel(gameList[index]), String(index)));
+        }
+        select.append(group);
+    }
+}
+
+function showGameDetails(game, side) {
+    const sideBox = $("gameSide");
+    const note = $("gameNote");
+
+    if (!game) {
+        sideBox.hidden = true;
+        note.textContent = "";
+        note.style.color = "";
+        return;
+    }
+
+    sideBox.hidden = false;
+    $("sideAway").textContent = game.away + " offense";
+    $("sideHome").textContent = game.home + " offense";
+    $("sideAway").classList.toggle("on", side === "away");
+    $("sideHome").classList.toggle("on", side === "home");
+
+    if (game.status === "final") {
+        note.textContent =
+            "Look-back: this game is final (" + game.away + " " + game.away_score + ", " +
+            game.home + " " + game.home_score + "). Projections use the season data available " +
+            "now, which already includes this game, so they are not a true pre-game prediction.";
+        note.style.color = "#fde68a";
+    } else if (game.status === "started") {
+        note.textContent =
+            "This game has kicked off. Sportsbook lines are usually closed and its stats are not in yet.";
+        note.style.color = "#fde68a";
+    } else {
+        note.textContent = "Week " + game.week + " | Kickoff " + gameTimeText(game.kickoff);
+        note.style.color = "";
+    }
+}
+
+function applyGame(game, side) {
+    if (!game) return;
+    selectedGame = game;
+    const offense = side === "home" ? game.home : game.away;
+    const defense = side === "home" ? game.away : game.home;
+
+    $("offense").value = offense;
+    $("defense").value = defense;
+    showGameDetails(game, side);
+
+    try {
+        localStorage.setItem(GAME_KEY, JSON.stringify({id: gameId(game), side}));
+    } catch (error) {}
+
+    resetProjections();
+    loadRoster();
+}
+
+function syncGamePicker() {
+    const offense = $("offense").value;
+    const defense = $("defense").value;
+    const select = $("gamePicker");
+
+    const matches = [];
+    gameList.forEach((game, index) => {
+        if ((game.away === offense && game.home === defense) ||
+            (game.home === offense && game.away === defense)) {
+            matches.push(index);
+        }
+    });
+
+    if (!offense || !defense || !matches.length) {
+        select.value = "";
+        selectedGame = null;
+        showGameDetails(null);
+        return;
+    }
+
+    const pick =
+        matches.find(i => gameList[i].week === currentWeek) ??
+        matches.find(i => gameList[i].status === "upcoming") ??
+        matches[matches.length - 1];
+
+    selectedGame = gameList[pick];
+    select.value = String(pick);
+    showGameDetails(selectedGame, selectedGame.away === offense ? "away" : "home");
+}
+
+function currentSide() {
+    return selectedGame && $("offense").value === selectedGame.home ? "home" : "away";
+}
+
+async function loadGames(quiet) {
+    const select = $("gamePicker");
+    try {
+        const data = await jsonFetch("/api/matchups");
+        gameList = data.games || [];
+        currentWeek = data.current_week == null ? null : Number(data.current_week);
+
+        for (let waited = 0; waited < 8000 && $("offense").options.length <= 1; waited += 100) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        buildGamePicker();
+        gamesLoadedAt = Date.now();
+
+        if (quiet) {
+            syncGamePicker();
+            return;
+        }
+
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(GAME_KEY) || "null"); } catch (error) {}
+        if (saved && !$("offense").value) {
+            const index = gameList.findIndex(game => gameId(game) === saved.id);
+            if (index >= 0) {
+                select.value = String(index);
+                applyGame(gameList[index], saved.side === "home" ? "home" : "away");
+            }
+        } else {
+            syncGamePicker();
+        }
+    } catch (error) {
+        if (!quiet) {
+            select.replaceChildren(new Option("Games unavailable - use the team menus below", ""));
+        }
+    }
+}
+
+$("gamePicker").addEventListener("change", () => {
+    const value = $("gamePicker").value;
+    if (value === "") {
+        selectedGame = null;
+        showGameDetails(null);
+        return;
+    }
+    applyGame(gameList[Number(value)], "away");
+});
+
+$("sideAway").addEventListener("click", () => applyGame(selectedGame, "away"));
+$("sideHome").addEventListener("click", () => applyGame(selectedGame, "home"));
+
+/* Keep the picker in step when teams are changed by hand or from Top Picks. */
+$("offense").addEventListener("change", syncGamePicker);
+$("defense").addEventListener("change", syncGamePicker);
+
+const viewWeeklyPlayerBeforePicker = viewWeeklyPlayer;
+viewWeeklyPlayer = async function(player) {
+    await viewWeeklyPlayerBeforePicker(player);
+    syncGamePicker();
+};
+
+/* Refresh scores and kickoff status when returning to the app after a while. */
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && Date.now() - gamesLoadedAt > 600000) loadGames(true);
+});
+
+loadGames(false);
 
 
 </script>
