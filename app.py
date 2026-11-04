@@ -436,6 +436,39 @@ def health():
     return {'status': 'ok', 'season': season(), 'live_odds_configured': bool(os.getenv('ODDS_API_KEY'))}
 
 
+@app.get('/api/matchups')
+def matchups():
+    """Every regular-season game (upcoming and played) for the matchup picker."""
+    item = cache.get('matchups')
+    if item and time.time() < item[0]:
+        return item[1]
+    d = schedule_df()
+    now = pd.Timestamp.now(tz='UTC')
+    home_score = column(d, ['home_score'])
+    away_score = column(d, ['away_score'])
+    current_week, _ = upcoming_week()
+    games = []
+    for _, g in d.sort_values('_kickoff').iterrows():
+        home, away = g['_home'], g['_away']
+        if home not in NFL_TEAMS or away not in NFL_TEAMS or pd.isna(g['_week']):
+            continue
+        hs = g[home_score] if home_score else None
+        a_s = g[away_score] if away_score else None
+        final = hs is not None and a_s is not None and pd.notna(hs) and pd.notna(a_s)
+        kickoff = g['_kickoff']
+        started = pd.notna(kickoff) and kickoff <= now
+        games.append({
+            'week': int(g['_week']), 'away': away, 'home': home,
+            'away_name': NFL_TEAMS[away], 'home_name': NFL_TEAMS[home],
+            'kickoff': kickoff.isoformat() if pd.notna(kickoff) else None,
+            'status': 'final' if final else 'started' if started else 'upcoming',
+            'away_score': int(a_s) if final else None,
+            'home_score': int(hs) if final else None})
+    result = {'season': season(), 'current_week': current_week, 'games': games}
+    cache['matchups'] = (time.time() + 120, result)
+    return result
+
+
 @app.get('/api/roster')
 def roster(team: str):
     team = norm_team(team)
