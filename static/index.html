@@ -342,8 +342,9 @@ body{padding:12px}
 <option value="newest">Recently saved first</option>
 <option value="last5">Best directional hit rate - last 5</option>
 <option value="season">Best directional hit rate - season</option>
+<option value="agreement">Strongest trend agreement</option>
 </select>
-<p class="small">Sorting uses each player's strongest saved prop in the selected period. Historical hit rates are descriptive, not win probabilities.</p>
+<p class="small">Sorting uses each player's strongest saved prop in the selected period. Trend agreement counts how many of Model, Last-5 History and Defense point the same way. Historical hit rates are descriptive, not win probabilities.</p>
 <div id="historyStatus" class="small" aria-live="polite"></div>
 <div id="historyCards"></div>
 <button id="clearHistoryButton" class="danger-button" onclick="clearHistory()" hidden>CLEAR ALL HISTORY</button>
@@ -2589,6 +2590,270 @@ box.append(historyText("history-meta",
 }
 return box;
 };
+
+
+/* ==========================================
+   RESTORED PROP TREND AGREEMENT
+   Model + Last 5 History + Defense
+   No extra API requests
+   ========================================== */
+
+function trendDirection(value, baseline) {
+    const a = Number(value);
+    const b = Number(baseline);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    if (a > b) return "OVER";
+    if (a < b) return "UNDER";
+    return null;
+}
+
+function trendDefenseSignal(kind, propKey, data) {
+    if (!data) return null;
+
+    let allowed = null;
+    let league = null;
+
+    if (kind === "qb") {
+        const defenseKey =
+            propKey === "rushing_yards" ? "qb_rushing_yards" :
+            propKey === "rushing_attempts" ? "qb_rushing_attempts" :
+            propKey;
+
+        allowed = data.defense_matchup?.allowed?.[defenseKey];
+        league = data.defense_matchup?.league?.[defenseKey];
+    }
+
+    if (kind === "rushing" &&
+        (propKey === "receiving_yards" || propKey === "receptions")) {
+        const defense = data.rb_receiving_defense;
+        if (propKey === "receiving_yards") {
+            allowed = defense?.yards;
+            league = defense?.league_yards;
+        } else {
+            allowed = defense?.receptions;
+            league = defense?.league_receptions;
+        }
+    }
+
+    // Other props do not currently provide a directly
+    // comparable NFL positional baseline in this frontend.
+    if (allowed == null || league == null ||
+        allowed === "" || league === "") return null;
+
+    return trendDirection(allowed, league);
+}
+
+function trendHistorySignal(prop) {
+    const rate = prop.hitRates?.last_5;
+    if (!rate || Number(rate.decided) <= 0) return null;
+
+    const over = Number(rate.over);
+    const under = Number(rate.under);
+
+    if (!Number.isFinite(over) || !Number.isFinite(under)) return null;
+    if (over > under) return "OVER";
+    if (under > over) return "UNDER";
+    return null;
+}
+
+function calculateTrendAgreement(prop) {
+    const signals = [
+        ["Model", trendDirection(prop.projection, prop.line)],
+        ["History", trendHistorySignal(prop)],
+        ["Defense", prop.trendDefense || null]
+    ];
+
+    const available = signals.filter(([, direction]) =>
+        direction === "OVER" || direction === "UNDER"
+    );
+
+    const over = available.filter(([, direction]) =>
+        direction === "OVER"
+    ).length;
+
+    const under = available.filter(([, direction]) =>
+        direction === "UNDER"
+    ).length;
+
+    const count = available.length;
+    const best = Math.max(over, under);
+
+    let direction = null;
+    if (over > under) direction = "OVER";
+    if (under > over) direction = "UNDER";
+
+    let label = "MIXED";
+
+    if (count >= 2 && direction && best >= 2) {
+        label = best + "/" + count + " " + direction;
+    }
+
+    return {label, best, count, direction, signals};
+}
+
+/* Save defensive signal with each new prop snapshot */
+
+const collectEdgesBeforeTrend = collectPlayerEdges;
+
+collectPlayerEdges = function(kind) {
+    const snapshot = collectEdgesBeforeTrend(kind);
+    if (!snapshot) return snapshot;
+
+    const data = kind === "qb"
+        ? qbProjection
+        : projections[kind];
+
+    for (const prop of snapshot.props) {
+        prop.trendDefense = trendDefenseSignal(
+            kind, prop.key, data
+        );
+    }
+
+    return snapshot;
+};
+
+/* Display agreement inside saved History cards */
+
+const renderSavedPropBeforeTrend = renderSavedProp;
+
+renderSavedProp = function(prop) {
+    const box = renderSavedPropBeforeTrend(prop);
+    const agreement = calculateTrendAgreement(prop);
+
+    const heading = historyText(
+        "history-prop-title",
+        "TREND AGREEMENT: " + agreement.label
+    );
+
+    heading.style.marginTop = "12px";
+    heading.style.color =
+        agreement.direction === "OVER" ? "#86efac" :
+        agreement.direction === "UNDER" ? "#fca5a5" :
+        "#fde68a";
+
+    box.append(heading);
+
+    for (const [name, direction] of agreement.signals) {
+        box.append(historyText(
+            "history-meta",
+            name + ": " + (direction || "UNAVAILABLE")
+        ));
+    }
+
+    box.append(historyText(
+        "history-meta",
+        "Agreement uses available signals only. " +
+        "Historical results are not win probabilities."
+    ));
+
+    return box;
+};
+
+/* Sort saved players by strongest agreement */
+
+const renderHistoryBeforeTrend = renderHistory;
+
+renderHistory = function() {
+    const sort = $("historySort");
+
+    if (!sort || sort.value !== "agreement") {
+        renderHistoryBeforeTrend();
+        return;
+    }
+
+    const records = checkHistoryReset();
+
+    const strength = record => {
+        let highest = 0;
+
+        for (const prop of (record.props || [])) {
+            const a = calculateTrendAgreement(prop);
+            const score = a.best >= 2 && a.direction
+                ? a.best * 10 + a.best / Math.max(a.count, 1)
+                : 0;
+
+            highest = Math.max(highest, score);
+        }
+
+        return highest;
+    };
+
+    records.sort((a, b) =>
+        strength(b) - strength(a) ||
+        Number(b.savedAt) - Number(a.savedAt)
+    );
+
+    const root = $("historyCards");
+    root.replaceChildren();
+
+    const totalProps = records.reduce(
+        (sum, item) => sum + (item.props?.length || 0), 0
+    );
+
+    $("historyStatus").textContent =
+        records.length + " saved players | " +
+        totalProps + " saved props";
+
+    $("clearHistoryButton").hidden = records.length === 0;
+
+    if (!records.length) {
+        root.append(historyText(
+            "small",
+            "No saved edges yet."
+        ));
+        return;
+    }
+
+    for (const record of records) {
+        const card = document.createElement("div");
+        card.className = "history-card";
+
+        card.append(
+            historyText(
+                "history-heading",
+                record.player + " (" + record.position + ")"
+            ),
+            historyText(
+                "small",
+                record.offense + " vs. " + record.opponentName
+            ),
+            historyText(
+                "history-meta",
+                "Saved: " + formatHawaiiTime(record.savedAt)
+            )
+        );
+
+        const details = document.createElement("div");
+        details.hidden = true;
+
+        for (const prop of (record.props || [])) {
+            details.append(renderSavedProp(prop));
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "history-actions";
+
+        const view = document.createElement("button");
+        view.className = "secondary-button";
+        view.textContent = "VIEW SAVED RESULTS";
+        view.onclick = () => {
+            details.hidden = !details.hidden;
+            view.textContent = details.hidden
+                ? "VIEW SAVED RESULTS"
+                : "HIDE RESULTS";
+        };
+
+        const remove = document.createElement("button");
+        remove.className = "danger-button";
+        remove.textContent = "REMOVE";
+        remove.onclick = () => removeSavedPlayer(record.id);
+
+        actions.append(view, remove);
+        card.append(actions, details);
+        root.append(card);
+    }
+};
+
 
 </script>
 </body>
