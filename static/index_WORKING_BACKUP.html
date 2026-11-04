@@ -64,9 +64,6 @@ body.info-open{overflow:hidden}
 .secondary-button{background:#34445d}
 .danger-button{background:#7f1d1d}
 .history-meta{font-size:12px;color:#afbdd1;line-height:1.6;margin-top:8px}
-.trend-panel{margin:12px 0;padding:12px;border:1px solid #50617a;border-radius:12px;background:#172235}
-.trend-title{font-size:13px;font-weight:800}.trend-over{color:#86efac}.trend-under{color:#fca5a5}.trend-mixed{color:#fde68a}
-.trend-detail{font-size:12px;color:#d9e2ef;line-height:1.55;margin-top:6px}
 @media(max-width:450px){
 body{padding:12px}
 .value{font-size:19px}
@@ -76,13 +73,24 @@ body{padding:12px}
 .history-number .value{font-size:17px}
 .history-card{padding:12px}
 }
+
+/* PROBABILITY / EV */
+.chip{display:inline-block;border-radius:8px;padding:3px 9px;font-size:12px;font-weight:800;margin-right:8px;background:#34445d;color:#e5ecf6}
+.chip.play{background:#14532d;color:#bbf7d0}
+.chip.lean{background:#713f12;color:#fde68a}
+.chip.pass{background:#334155;color:#cbd5e1}
+.an{margin:10px 0}
+.an-main{font-weight:750;overflow-wrap:anywhere}
+.an .small{margin:6px 0 0}
+.an-ev{font-weight:750;margin-top:6px}
+.bad{color:#fca5a5}
 </style>
 </head>
 <body>
 
 <header>
 <div id="connection" class="small">CONNECTING TO NFL DATA...</div>
-<h1>NFL NFL Player Prop Projections</h1>
+<h1>🏈 NFL Player Prop Projections</h1>
 <p>Postgame statistics, receiving and rushing projections, and DraftKings comparisons.</p>
 </header>
 
@@ -131,7 +139,7 @@ body{padding:12px}
 </div>
 
 <div class="card">
-<h2>QUICK Quick Read</h2>
+<h2>⚡ Quick Read</h2>
 <div id="receivingQuick" class="small"></div>
 </div>
 
@@ -155,7 +163,7 @@ body{padding:12px}
 <h2>Your Prop Line Comparison</h2>
 <div class="grid" id="receivingManual"></div>
 </div>
-<div class="card" id="receivingHitCard" hidden><h2>STATS Historical OVER / UNDER Hit Rates</h2><p class="small">Compared with your manual lines. Pushes excluded from percentages.</p><div id="receivingHitRates"></div></div>
+<div class="card" id="receivingHitCard" hidden><h2>📊 Historical OVER / UNDER Hit Rates</h2><p class="small">Compared with your manual lines. Pushes excluded from percentages.</p><div id="receivingHitRates"></div></div>
 
 <div class="card">
 <h2>Live DraftKings</h2>
@@ -165,7 +173,7 @@ body{padding:12px}
 </div>
 
 <div class="card save-card">
-<h2>TARGET Save Your Edges</h2>
+<h2>🎯 Save Your Edges</h2>
 <p class="small">Save this player's available manual or DraftKings prop lines and edges. Props without lines are skipped.</p>
 <button id="saveReceiving" class="save-button" onclick="savePlayer('receiving')">SAVE PLAYER</button>
 <div id="saveReceivingMessage" class="small save-message" aria-live="polite"></div>
@@ -204,12 +212,12 @@ body{padding:12px}
 </div>
 
 <div class="card">
-<h2>QUICK Quick Read</h2>
+<h2>⚡ Quick Read</h2>
 <div id="rushingQuick" class="small"></div>
 </div>
 
 <div class="card">
-<h2>NFL All Four RB Props - Quick Comparison</h2>
+<h2>🏈 All Four RB Props - Quick Comparison</h2>
 <div class="grid" id="rbFourQuick"></div>
 <p class="small">DraftKings lines appear after tapping Fetch; manual lines are used when a DraftKings line is unavailable.</p>
 </div>
@@ -236,7 +244,7 @@ body{padding:12px}
 <div class="grid" id="rushingManual"></div>
 </div>
 
-<div class="card" id="rushingHitCard" hidden><h2>STATS Historical OVER / UNDER Hit Rates</h2><p class="small">Compared with your manual lines. Pushes excluded from percentages.</p><div id="rushingHitRates"></div></div>
+<div class="card" id="rushingHitCard" hidden><h2>📊 Historical OVER / UNDER Hit Rates</h2><p class="small">Compared with your manual lines. Pushes excluded from percentages.</p><div id="rushingHitRates"></div></div>
 
 <div class="card">
 <h2>Live DraftKings</h2>
@@ -246,7 +254,7 @@ body{padding:12px}
 </div>
 
 <div class="card save-card">
-<h2>TARGET Save Your Edges</h2>
+<h2>🎯 Save Your Edges</h2>
 <p class="small">Save one, several, or all four RB prop comparisons, depending on which lines are available.</p>
 <button id="saveRushing" class="save-button" onclick="savePlayer('rushing')">SAVE PLAYER</button>
 <div id="saveRushingMessage" class="small save-message" aria-live="polite"></div>
@@ -277,7 +285,7 @@ body{padding:12px}
 </div>
 
 <div class="card">
-<h2>QUICK All Seven QB Props - Quick Comparison</h2>
+<h2>⚡ All Seven QB Props - Quick Comparison</h2>
 <div class="grid" id="qbQuick"></div>
 <p class="small">DraftKings lines appear after Fetch. Manual lines are used when DraftKings lines are unavailable. Model edge is not a win probability.</p>
 </div>
@@ -293,7 +301,7 @@ body{padding:12px}
 <p class="small">Passing TDs and interceptions are especially variable. Confidence is a data-quality label, not a betting win probability.</p>
 </div>
 
-<div class="card" id="qbHitCard" hidden><h2>STATS Historical OVER / UNDER Hit Rates</h2><p class="small">Compared with your manual lines. Pushes excluded from percentages.</p><div id="qbHitRates"></div></div>
+<div class="card" id="qbHitCard" hidden><h2>📊 Historical OVER / UNDER Hit Rates</h2><p class="small">Compared with your manual lines. Pushes excluded from percentages.</p><div id="qbHitRates"></div></div>
 
 <div class="card">
 <h2>Live DraftKings</h2>
@@ -303,7 +311,7 @@ body{padding:12px}
 </div>
 
 <div class="card save-card">
-<h2>TARGET Save Your Edges</h2>
+<h2>🎯 Save Your Edges</h2>
 <p class="small">Save whichever QB props have manual or DraftKings lines. Props without lines are skipped.</p>
 <button id="saveQb" class="save-button" onclick="savePlayer('qb')">SAVE PLAYER</button>
 <div id="saveQbMessage" class="small save-message" aria-live="polite"></div>
@@ -314,10 +322,10 @@ body{padding:12px}
 <!-- TOP PICKS TAB -->
 <section id="weeklyPanel" hidden>
 <div class="card">
-<h2>TOP Top Picks</h2>
+<h2>🏆 Top Picks</h2>
 <p class="small">Up to 10 OVER and 10 UNDER trends relative to season averages, based on recent form and defensive matchups. These are not sportsbook-line picks. No Odds API credits.</p>
 <p id="weeklyStatus" class="small">Open this tab to load the weekly list.</p>
-<p class="small" style="color:#fde68a">WARNING Injury status is not verified. Check official game-day availability before using any projection.</p>
+<p class="small" id="weeklyWarn" style="color:#fde68a">⚠️ Players listed OUT/DOUBTFUL on the official injury report are excluded once that week's report is published. Always check game-day availability before using any projection.</p>
 <div id="weeklyCards"></div>
 </div>
 </section>
@@ -325,7 +333,7 @@ body{padding:12px}
 <!-- HISTORY TAB -->
 <section id="historyPanel" hidden>
 <div class="card">
-<h2>TARGET My Saved Edges</h2>
+<h2>🎯 My Saved Edges</h2>
 <p class="small">Your personal DraftKings decision shortlist. Each saved player contains only props with available lines.</p>
 <p class="history-note">SAVED SNAPSHOTS - NOT LIVE ODDS. Verify the current DraftKings line before placing a wager.</p>
 <p class="small">Automatically clears every Tuesday at 6:00 AM Hawaii time when the dashboard is next opened or used.</p>
@@ -336,7 +344,7 @@ body{padding:12px}
 <option value="season">Best directional hit rate - season</option>
 <option value="agreement">Strongest trend agreement</option>
 </select>
-<p class="small">Sorting uses each player's strongest saved prop. Trend agreement compares last-5 historical results, the projection, and defense vs the NFL average. Missing or tied signals do not count. Agreement is not a win probability.</p>
+<p class="small">Sorting uses each player's strongest saved prop in the selected period. Trend agreement counts how many of Model, Last-5 History and Defense point the same way. Historical hit rates are descriptive, not win probabilities.</p>
 <div id="historyStatus" class="small" aria-live="polite"></div>
 <div id="historyCards"></div>
 <button id="clearHistoryButton" class="danger-button" onclick="clearHistory()" hidden>CLEAR ALL HISTORY</button>
@@ -368,34 +376,35 @@ let receivingOddsFetchedAt = null;
 let rushingOddsFetchedAt = null;
 let qbOddsFetchedAt = null;
 let weeklyLoaded = false;
+let weeklyLoadedAt = 0;
 
 /* INFORMATION EXPLANATIONS */
 
 const INFO_TEXT = {
 confidence:{
-title:"DEFENSE Understanding Confidence",
+title:"🛡️ Understanding Confidence",
 content:`
 <p>Confidence describes the amount and consistency of statistical information supporting a projection.</p>
-<p>HIGH <strong>HIGH</strong><br>Stronger supporting data and relatively consistent player performance.</p>
-<p>MEDIUM <strong>MEDIUM</strong><br>Adequate supporting data, with some variation.</p>
-<p>LOW <strong>LOW</strong><br>Limited data or greater statistical uncertainty.</p>
+<p>🟢 <strong>HIGH</strong><br>Stronger supporting data and relatively consistent player performance.</p>
+<p>🟡 <strong>MEDIUM</strong><br>Adequate supporting data, with some variation.</p>
+<p>🔴 <strong>LOW</strong><br>Limited data or greater statistical uncertainty.</p>
 <p>Top Picks only includes HIGH- and MEDIUM-confidence opportunities.</p>
 <p><strong>Important:</strong> Confidence is a data-quality rating, not the probability of winning a bet.</p>`
 },
 opportunity:{
-title:"TOP Opportunity Score Explained",
+title:"🏆 Opportunity Score Explained",
 content:`
 <p>Opportunity Score measures the size of a projected move ABOVE or BELOW a player's season average. OVER and UNDER refer to the season baseline, not a sportsbook line.</p>
 <p><strong>Example:</strong><br>Season average: 75 yards<br>Projection: 90 yards<br>Projected improvement: +20%</p>
 <p>The model adds a confidence bonus:</p>
-<p>HIGH HIGH: +5 points<br>MEDIUM MEDIUM: +2 points<br>LOW LOW: Excluded</p>
+<p>🟢 HIGH: +5 points<br>🟡 MEDIUM: +2 points<br>🔴 LOW: Excluded</p>
 <p><strong>Example score:</strong><br>20 + 5 = 25.0</p>
 <p>The absolute percentage change is capped at 30 points, making 35 the maximum possible Opportunity Score for either direction.</p>
 <p>The score compares the projection with the player's season average, not the sportsbook line.</p>
 <p><strong>Important:</strong> A score of 25 does not mean a 25% chance of winning.</p>`
 },
 projection:{
-title:"STATS How Projections Work",
+title:"📊 How Projections Work",
 content:`
 <p>A projection is the model's estimate of a player's next-game performance.</p>
 <p>The dashboard looks at available player statistics, recent production, season performance, and player usage.</p>
@@ -405,7 +414,7 @@ content:`
 <p><strong>Important:</strong> Projections are estimates. Injuries, weather, and game situations can change actual results.</p>`
 },
 defense:{
-title:"DEFENSE Defensive Matchup Explained",
+title:"🛡️ Defensive Matchup Explained",
 content:`
 <p>Defensive matchup statistics describe how an opposing defense has performed against certain positions or plays.</p>
 <p>A defense allowing more receiving yards than average may be a more favorable matchup for a receiver.</p>
@@ -414,7 +423,7 @@ content:`
 <p><strong>Important:</strong> Past defensive performance does not guarantee future results.</p>`
 },
 edge:{
-title:"TARGET Understanding Model Edge",
+title:"🎯 Understanding Model Edge",
 content:`
 <p>Edge is the difference between your model's projection and the sportsbook or manually entered prop line.</p>
 <p><strong>Example:</strong><br>Model projection: 92.5 yards<br>Sportsbook line: 80.5 yards<br>Edge: +12.0 yards</p>
@@ -490,7 +499,7 @@ function confidenceBadge(value,label){
 const element=document.createElement("span");
 const level=["HIGH","MEDIUM","LOW"].includes(value)?value:"LOW";
 element.className="confidence-badge "+level.toLowerCase();
-const icons={HIGH:"HIGH",MEDIUM:"MEDIUM",LOW:"LOW"};
+const icons={HIGH:"🟢",MEDIUM:"🟡",LOW:"🔴"};
 element.textContent=icons[level]+" "+label+": "+level;
 return element;
 }
@@ -935,6 +944,7 @@ player:player
 });
 
 const odds=await jsonFetch("/api/live-odds?"+params.toString());
+allBooks[kind]=odds.books||{};
 
 const props=kind==="receiving"
 ?[
@@ -1155,6 +1165,7 @@ player:data.quarterback
 });
 
 const odds=await jsonFetch("/api/live-odds?"+params.toString());
+allBooks.qb=odds.books||{};
 
 qbDraftKings=odds.books?.DraftKings||{};
 qbOddsFetchedAt=Date.now();
@@ -1221,7 +1232,7 @@ async function refreshHitRates(kind){
 /* TOP PICKS - SAME BACKEND AND RANKING */
 
 async function loadWeekly(){
-if(weeklyLoaded)return;
+if(weeklyLoaded&&Date.now()-weeklyLoadedAt<600000)return;
 
 $("weeklyStatus").textContent=
 "Analyzing upcoming games and player trends...";
@@ -1229,6 +1240,8 @@ $("weeklyStatus").textContent=
 try{
 const data=await jsonFetch("/api/weekly-top20");
 weeklyLoaded=true;
+weeklyLoadedAt=Date.now();
+if(data.note&&$("weeklyWarn"))$("weeklyWarn").textContent="⚠️ "+data.note;
 
 $("weeklyStatus").textContent=
 "Generated: "+data.as_of_hst+
@@ -1345,7 +1358,7 @@ await runQbProjection();
 }else if(panel==="rushing"){
 await runRushingProjection();
 }else{
-alert("Select the correct quarterback, then generate the receiving projection.");
+await runProjection();
 }
 }
 
@@ -1498,48 +1511,9 @@ return {entry:manual,source:"Manual"};
 return null;
 }
 
-/* DEFENSIVE MATCHUP SNAPSHOT FOR SAVED PROPS */
-function defensiveSnapshot(kind,data,key){
- const result={label:"",allowed:null,league:null,games:0,note:""};
- if(kind==="receiving"){
-  result.games=data.position_defense_games??0;
-  if(key==="receiving_yards"){
-   const position=$("receiver").selectedOptions[0]?.dataset.position||"WR/TE";
-   result.label="Opponent yards allowed to "+position+" (all players at position / game)";
-   result.allowed=data.position_defense_yards_allowed;
-   result.league=data.league_position_yards_allowed;
-  }else{
-   result.note="Position-specific receptions allowed not available from this projection.";
-  }
- }else if(kind==="rushing"){
-  if(key==="rushing_yards"){
-   result.label="Opponent rushing yards allowed to RBs (all RBs / game)";
-   result.allowed=data.position_defense_yards_allowed;
-   result.league=data.league_position_yards_allowed;
-   result.games=data.position_defense_games??0;
-  }else if(key==="receiving_yards"||key==="receptions"){
-   const d=data.rb_receiving_defense||{};
-   result.label=key==="receiving_yards"?"Opponent RB receiving yards allowed (all RBs / game)":"Opponent RB receptions allowed (all RBs / game)";
-   result.allowed=key==="receiving_yards"?d.yards:d.receptions;
-   result.league=key==="receiving_yards"?d.league_yards:d.league_receptions;
-   result.games=d.games??0;
-  }else{
-   result.note="RB rushing attempts allowed not available from this projection.";
-  }
- }else if(kind==="qb"){
-  const d=data.defense_matchup||{};
-  const field=key==="rushing_yards"?"qb_rushing_yards":key==="rushing_attempts"?"qb_rushing_attempts":key;
-  result.label="Opponent "+key.replaceAll("_"," ")+" allowed to QBs (per game)";
-  result.allowed=d.allowed?.[field];
-  result.league=d.league?.[field];
-  result.games=d.games??0;
- }
- return result;
-}
-
 /* BUILD ONE SAVED PROP */
 
-function savedProp(key,label,unit,projection,choice,confidence,fetchedAt,defensive){
+function savedProp(key,label,unit,projection,choice,confidence,fetchedAt){
 if(!choice)return null;
 
 const projected=Number(projection);
@@ -1565,8 +1539,7 @@ confidence:confidence||"-",
 overPrice:choice.entry.over_price??null,
 underPrice:choice.entry.under_price??null,
 bookUpdatedAt:choice.entry.last_update??null,
-fetchedAt:choice.source==="DraftKings"?fetchedAt:null,
-defensive:defensive||null
+fetchedAt:choice.source==="DraftKings"?fetchedAt:null
 };
 }
 
@@ -1681,8 +1654,7 @@ item.unit,
 item.projection,
 item.choice,
 item.confidence,
-item.fetchedAt,
-defensiveSnapshot(kind,data,item.key)
+item.fetchedAt
 ))
 .filter(Boolean);
 
@@ -1763,7 +1735,7 @@ updated.unshift(snapshot);
 
 writeHistory(updated);
 
-button.textContent="OK PLAYER SAVED";
+button.textContent="✅ PLAYER SAVED";
 button.classList.add("saved");
 
 message.textContent=
@@ -1804,34 +1776,6 @@ function formatEdge(edge){
 return (edge>0?"+":"")+Number(edge).toFixed(2);
 }
 
-/* Saved trend agreement: no new API requests. */
-function propTrendAgreement(prop){
- const votes=[];
- const model=Number(prop.projection),line=Number(prop.line);
- votes.push({name:"Model projection",direction:Number.isFinite(model)&&Number.isFinite(line)?(model>line?"OVER":model<line?"UNDER":null):null});
- const last5=prop.hitRates?.last_5,season=prop.hitRates?.season;
- const rate=Number(last5?.decided)>0?last5:Number(season?.decided)>0?season:null;
- const historyLabel=rate===last5?"Last 5 hit rate":rate===season?"Season hit rate (fallback)":"Historical hit rate";
- let hist=null;
- if(rate){const over=Number(rate.over),under=Number(rate.under);if(Number.isFinite(over)&&Number.isFinite(under))hist=over>under?"OVER":under>over?"UNDER":null;}
- votes.push({name:historyLabel,direction:hist});
- const d=prop.defensive,allowed=d?.allowed==null?NaN:Number(d.allowed),league=d?.league==null?NaN:Number(d.league);
- const def=Number.isFinite(allowed)&&Number.isFinite(league)&&league>0?(allowed>league?"OVER":allowed<league?"UNDER":null):null;
- votes.push({name:"Opponent defense vs NFL average",direction:def});
- const over=votes.filter(v=>v.direction==="OVER").length,under=votes.filter(v=>v.direction==="UNDER").length;
- const available=over+under,agreeing=Math.max(over,under),winner=agreeing>=2?(over>under?"OVER":under>over?"UNDER":null):null;
- const label=winner?agreeing+"/"+available+" "+winner:available===0?"Incomplete":available===1?"Incomplete (1/3 signals)":"Mixed / Incomplete";
- return {votes,available,agreeing,winner,label,sortScore:winner?(agreeing===3?300:available===3?200:100):0};
-}
-function trendPanel(prop){
- const trend=propTrendAgreement(prop),panel=document.createElement("div");panel.className="trend-panel";
- panel.append(historyText("trend-title "+(trend.winner==="OVER"?"trend-over":trend.winner==="UNDER"?"trend-under":"trend-mixed"),"PROP TREND AGREEMENT: "+trend.label));
- for(const vote of trend.votes)panel.append(historyText("trend-detail",(vote.direction==="OVER"?"OVER":vote.direction==="UNDER"?"UNDER":"Neutral / unavailable")+" | "+vote.name));
- panel.append(historyText("trend-detail","Agreement is descriptive, not a win probability. The model may already incorporate defense."));
- return panel;
-}
-function bestTrendScore(record){return Math.max(0,...(record.props||[]).map(prop=>propTrendAgreement(prop).sortScore));}
-
 function renderSavedProp(prop){
 const box=document.createElement("div");
 box.className="history-prop";
@@ -1867,28 +1811,7 @@ const meta=historyText(
 " | Confidence: "+prop.confidence
 );
 
-box.append(title,trendPanel(prop),numbers,meta);
-
-if(prop.defensive){
- const d=prop.defensive;
- box.append(historyText("history-meta","DEFENSIVE MATCHUP (snapshot)"));
- if(d.allowed!=null&&Number.isFinite(Number(d.allowed))){
-  const opponent=Number(d.allowed);
-  const league=d.league==null?null:Number(d.league);
-  let summary=d.label+": "+opponent.toFixed(2);
-  if(league!=null&&Number.isFinite(league)){
-   summary+=" | NFL avg: "+league.toFixed(2);
-   if(league>0)summary+=" | "+((opponent/league-1)*100).toFixed(1)+"% vs NFL avg";
-  }
-  summary+=" | Sample: "+d.games+" games";
-  box.append(historyText("history-meta",summary));
-  box.append(historyText("history-meta","These are opponent defensive averages across the position, not the hit rate against your individual prop line."));
- }else{
-  box.append(historyText("history-meta",d.note||"Defensive matchup data unavailable for this prop."));
- }
-}else{
- box.append(historyText("history-meta","Defensive snapshot not saved with this older pick. Save the player again to add it."));
-}
+box.append(title,numbers,meta);
 
 if(prop.hitRates){
  const heading=historyText("history-meta","Historical results vs saved line "+prop.line+" (snapshot)");
@@ -1955,7 +1878,6 @@ function bestSavedRate(record,period){
 function renderHistory(){
 const mode=$("historySort")?.value||"newest";
 const records=checkHistoryReset().sort((a,b)=>{
- if(mode==="agreement"){const difference=bestTrendScore(b)-bestTrendScore(a);if(difference!==0)return difference;}
  if(mode==="last5"||mode==="season"){
   const period=mode==="last5"?"last_5":"season";
   const difference=bestSavedRate(b,period)-bestSavedRate(a,period);
@@ -2367,6 +2289,571 @@ runQbProjection = async function () {
         await showQbTouchdowns(qbProjection);
     }
 };
+
+
+/* ============================================================
+   WIN PROBABILITY, EXPECTED VALUE, INJURY STATUS, LINE SHOPPING
+   Additive: existing projections and screens are unchanged.
+   ============================================================ */
+
+const allBooks={receiving:{},rushing:{},qb:{}};
+const lastAnalysis={receiving:{},rushing:{},qb:{}};
+const insightVersion={receiving:0,rushing:0,qb:0};
+const INSIGHT_HOST={receiving:"results",rushing:"rushResults",qb:"qbResults"};
+const insightTimers={};
+
+INFO_TEXT.ev={
+title:"🎲 Probability & Expected Value",
+content:`
+<p><strong>Win probability</strong> uses the player's game-to-game spread (not just the average) to estimate how often the result lands OVER or UNDER the line.</p>
+<p>The projection is blended 70/30 with the posted line, because sportsbooks are usually sharper than a single model. This reduces false edges.</p>
+<p><strong>Market (no-vig)</strong> is the sportsbook's own probability after removing its built-in profit margin. If only one price is posted, the other side is estimated.</p>
+<p><strong>Expected value (EV)</strong> is the average profit per $1 if the model's probability were exactly right. +5% means about 5 cents per dollar over many bets.</p>
+<p><strong>PLAY</strong>: EV of at least +5%, a 4+ point probability edge and decent data. <strong>LEAN</strong>: EV of at least +2%. <strong>PASS</strong>: not enough edge.</p>
+<p><strong>Stake</strong> is quarter-Kelly, capped at 1.5% of bankroll.</p>
+<p><strong>Important:</strong> These are estimates, not guarantees. Injuries, role changes and game script can move results. Prop markets are efficient, so treat this as a research tool and bet small.</p>`
+};
+
+const mk=(tag,cls,text)=>{
+const node=document.createElement(tag);
+if(cls)node.className=cls;
+if(text!==undefined&&text!==null)node.textContent=text;
+return node;
+};
+const fmtPrice=price=>price==null?"":(Number(price)>0?"+":"")+Number(price);
+const pctText=x=>(Number(x)*100).toFixed(1)+"%";
+
+function insightSpec(kind){
+if(kind==="receiving"){
+const d=projections.receiving;if(!d)return null;
+return {player:d.receiver,team:d.offense_team,dg:d.defense_games_sampled,dk:receivingDraftKings,
+props:[["receiving_yards","Receiving Yards",d.improved_projection,"line"],
+["receptions","Receptions",d.projected_receptions,"receptionsLine"]]};
+}
+if(kind==="rushing"){
+const d=projections.rushing;if(!d)return null;
+return {player:d.running_back,team:d.offense_team,dg:d.defense_games_sampled,dk:rbDraftKings,
+props:[["rushing_yards","Rushing Yards",d.projected_rushing_yards,"rushYardsLine"],
+["rushing_attempts","Rushing Attempts",d.projected_attempts,"rushAttemptsLine"],
+["receiving_yards","RB Receiving Yards",d.rb_receiving_yards_projection,"rbReceivingYardsLine"],
+["receptions","RB Receptions",d.rb_receptions_projection,"rbReceptionsLine"]]};
+}
+const d=qbProjection;if(!d)return null;
+return {player:d.quarterback,team:d.offense_team,dg:d.defense_games_sampled,dk:qbDraftKings,
+props:QB_PROPS.map(([key,label])=>[key,label,d.projections[key],"qbLine_"+key])};
+}
+
+function renderInjury(node,info){
+node.replaceChildren();
+const status=info.status;
+let text,color;
+if(status==="OUT"||status==="DOUBTFUL"){
+text="⛔ "+status+(info.injury?" ("+info.injury+")":"")+" on the official injury report. Do not rely on this projection.";
+color="#fca5a5";
+}else if(status==="QUESTIONABLE"){
+text="⚠️ QUESTIONABLE"+(info.injury?" ("+info.injury+")":"")+" on the official injury report. Verify status before betting.";
+color="#fde68a";
+}else if(status==="HEALTHY"){
+text="✅ No injury designation on the official Week "+info.week+" report.";
+color="#86efac";
+}else{
+text="ℹ️ The official injury report for the upcoming week is not published yet. Verify status before betting.";
+color="#fde68a";
+}
+node.style.color=color;
+node.style.fontWeight="700";
+node.textContent=text;
+}
+
+function analysisBlock(item){
+const a=item.a;
+const box=mk("div","metric an");
+const top=mk("div");
+top.append(mk("span","chip "+a.rating.toLowerCase(),a.rating));
+top.append(mk("span","an-main",
+item.label+": "+a.side+" "+a.line+
+(a.side_price!=null?" ("+fmtPrice(a.side_price)+")":"")+" - "+item.source));
+box.append(top);
+
+let probability="Win probability: OVER "+pctText(a.prob_over)+" | UNDER "+pctText(a.prob_under);
+if(a.prob_push>0.005)probability+=" | Push "+pctText(a.prob_push);
+box.append(mk("div","small",probability));
+
+const edge=Math.round(a.edge_pts*1000)/10;
+box.append(mk("div","small",
+"Model "+a.side+" "+pctText(a.side_prob)+" vs market (no-vig) "+pctText(a.side_fair)+
+" | Edge "+(edge>0?"+":"")+edge.toFixed(1)+" pts"));
+
+const ev=mk("div","an-ev "+(a.ev>0?"good":"bad"),
+"Expected value: "+(a.ev>0?"+":"")+(a.ev*100).toFixed(1)+"% per $1");
+ev.append(infoIcon("ev"));
+box.append(ev);
+
+if(a.stake_pct>0){
+box.append(mk("div","small","Suggested stake: "+a.stake_pct.toFixed(2)+"% of bankroll (quarter-Kelly, capped)"));
+}
+box.append(mk("div","small","Projection "+a.projection+" | typical swing +/-"+a.sd+" | confidence "+a.confidence));
+for(const note of (a.notes||[]))box.append(mk("div","small",note));
+for(const warning of (a.warnings||[]))box.append(mk("div","history-note",warning));
+return box;
+}
+
+function shoppingBlock(kind,spec){
+const books=allBooks[kind]||{};
+const names=Object.keys(books);
+const root=mk("div");
+let any=false;
+for(const [key,label] of spec.props){
+const entries=[];
+for(const name of names){
+const entry=books[name]?.[key];
+if(entry&&validEntry(entry))entries.push({name,entry});
+}
+if(entries.length<2)continue;
+any=true;
+const lowest=entries.reduce((x,y)=>Number(y.entry.line)<Number(x.entry.line)?y:x);
+const highest=entries.reduce((x,y)=>Number(y.entry.line)>Number(x.entry.line)?y:x);
+const row=mk("div","metric an");
+row.append(mk("div","label",label));
+row.append(mk("div","small",entries.map(x=>
+x.name+" "+x.entry.line+(x.entry.over_price!=null||x.entry.under_price!=null
+?" (O "+fmtPrice(x.entry.over_price)+" / U "+fmtPrice(x.entry.under_price)+")":"")).join("\n")));
+row.lastChild.style.whiteSpace="pre-line";
+row.append(mk("div","small","Best number for OVER: "+lowest.name+" "+lowest.entry.line+
+" | for UNDER: "+highest.name+" "+highest.entry.line));
+root.append(row);
+}
+if(!any)return null;
+const wrapper=mk("div");
+wrapper.append(mk("h2","section","🛒 Line Shopping"));
+wrapper.append(mk("p","small","Same prop across sportsbooks. A half-point difference changes the probability noticeably."));
+wrapper.append(root);
+return wrapper;
+}
+
+async function renderInsights(kind){
+const spec=insightSpec(kind);
+const host=$(INSIGHT_HOST[kind]);
+if(!spec||!host||host.hidden)return;
+const version=++insightVersion[kind];
+
+let card=$(kind+"Insights");
+if(!card){
+card=mk("div","card");
+card.id=kind+"Insights";
+host.insertBefore(card,host.children[1]||null);
+}
+card.replaceChildren();
+card.append(mk("h2",null,"🎲 Probability & Expected Value"));
+
+const injury=mk("div","small","Checking official injury report...");
+card.append(injury);
+jsonFetch("/api/injury-status?"+new URLSearchParams({team:spec.team,player_name:spec.player}))
+.then(info=>{if(version===insightVersion[kind])renderInjury(injury,info);})
+.catch(()=>{if(version===insightVersion[kind])injury.textContent="Injury report unavailable. Verify status before betting.";});
+
+const list=mk("div");
+card.append(list);
+
+const jobs=[];
+for(const [key,label,projection,inputId] of spec.props){
+const choice=chooseLine(spec.dk[key],inputId);
+if(!choice)continue;
+const entry=choice.entry;
+const params=new URLSearchParams({
+team:spec.team,player_name:spec.player,prop:key,
+line:String(entry.line),projection:String(projection),
+defense_games:String(spec.dg||0)
+});
+if(entry.over_price!=null)params.set("over_price",String(entry.over_price));
+if(entry.under_price!=null)params.set("under_price",String(entry.under_price));
+jobs.push(
+jsonFetch("/api/analyze-line?"+params.toString())
+.then(a=>({key,label,source:choice.source,a}))
+.catch(error=>({key,label,error:error.message}))
+);
+}
+
+if(!jobs.length){
+list.append(mk("p","small","Enter a manual line, or fetch DraftKings, to see win probability and expected value for each prop."));
+}else{
+list.append(mk("p","small","Loading probabilities..."));
+const results=await Promise.all(jobs);
+if(version!==insightVersion[kind])return;
+lastAnalysis[kind]={};
+list.replaceChildren();
+for(const item of results){
+if(item.error){
+list.append(mk("div","small",item.label+": unavailable ("+item.error+")"));
+continue;
+}
+lastAnalysis[kind][item.key]=item.a;
+list.append(analysisBlock(item));
+}
+list.append(mk("p","small","Model estimates, not guarantees. Lines without odds assume -110 on both sides."));
+}
+
+const shopping=shoppingBlock(kind,spec);
+if(shopping)card.append(shopping);
+}
+
+function scheduleInsights(kind){
+clearTimeout(insightTimers[kind]);
+insightTimers[kind]=setTimeout(()=>renderInsights(kind),500);
+}
+
+/* Hook into the existing flows without replacing them. */
+
+const projectionRunners={
+receiving:()=>projections.receiving&&!$("results").hidden,
+rushing:()=>projections.rushing&&!$("rushResults").hidden,
+qb:()=>qbProjection&&!$("qbResults").hidden
+};
+
+const insightsAfterReceiving=runProjection;
+runProjection=async function(){
+await insightsAfterReceiving();
+if(projectionRunners.receiving())renderInsights("receiving");
+};
+
+const insightsAfterRushing=runRushingProjection;
+runRushingProjection=async function(){
+await insightsAfterRushing();
+if(projectionRunners.rushing())renderInsights("rushing");
+};
+
+const insightsAfterQb=runQbProjection;
+runQbProjection=async function(){
+await insightsAfterQb();
+if(projectionRunners.qb())renderInsights("qb");
+};
+
+const insightsAfterLive=getLive;
+getLive=async function(kind){
+await insightsAfterLive(kind);
+renderInsights(kind);
+};
+
+const insightsAfterQbLive=getQbLive;
+getQbLive=async function(){
+await insightsAfterQbLive();
+renderInsights("qb");
+};
+
+const insightsAfterReset=resetProjections;
+resetProjections=function(){
+insightsAfterReset();
+for(const kind of ["receiving","rushing","qb"]){
+allBooks[kind]={};
+lastAnalysis[kind]={};
+insightVersion[kind]++;
+const card=$(kind+"Insights");
+if(card)card.remove();
+}
+};
+
+for(const [kind,ids] of Object.entries({
+receiving:["line","receptionsLine"],
+rushing:["rushYardsLine","rushAttemptsLine","rbReceivingYardsLine","rbReceptionsLine"],
+qb:QB_PROPS.map(([key])=>"qbLine_"+key)
+})){
+for(const id of ids){
+$(id).addEventListener("input",()=>{if(projectionRunners[kind]())scheduleInsights(kind);});
+}
+}
+
+/* Saved History: keep the probability / EV snapshot with each saved prop. */
+
+const collectEdgesBase=collectPlayerEdges;
+collectPlayerEdges=function(kind){
+const snapshot=collectEdgesBase(kind);
+if(snapshot){
+for(const prop of snapshot.props){
+const analysis=lastAnalysis[kind]?.[prop.key];
+if(analysis)prop.analysis=analysis;
+}
+}
+return snapshot;
+};
+
+const renderSavedPropBase=renderSavedProp;
+renderSavedProp=function(prop){
+const box=renderSavedPropBase(prop);
+const a=prop.analysis;
+if(a){
+box.append(historyText("history-meta",
+"Probability snapshot: OVER "+pctText(a.prob_over)+" | UNDER "+pctText(a.prob_under)+
+" | Market (no-vig) "+a.side+" "+pctText(a.side_fair)));
+box.append(historyText("history-meta",
+"Rating "+a.rating+" "+a.side+" | EV "+(a.ev>0?"+":"")+(a.ev*100).toFixed(1)+"%"+
+(a.stake_pct>0?" | Stake "+a.stake_pct.toFixed(2)+"% of bankroll":"")));
+}
+return box;
+};
+
+
+/* ==========================================
+   RESTORED PROP TREND AGREEMENT
+   Model + Last 5 History + Defense
+   No extra API requests
+   ========================================== */
+
+function trendDirection(value, baseline) {
+    const a = Number(value);
+    const b = Number(baseline);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    if (a > b) return "OVER";
+    if (a < b) return "UNDER";
+    return null;
+}
+
+function trendDefenseSignal(kind, propKey, data) {
+    if (!data) return null;
+
+    let allowed = null;
+    let league = null;
+
+    if (kind === "qb") {
+        const defenseKey =
+            propKey === "rushing_yards" ? "qb_rushing_yards" :
+            propKey === "rushing_attempts" ? "qb_rushing_attempts" :
+            propKey;
+
+        allowed = data.defense_matchup?.allowed?.[defenseKey];
+        league = data.defense_matchup?.league?.[defenseKey];
+    }
+
+    if (kind === "rushing" &&
+        (propKey === "receiving_yards" || propKey === "receptions")) {
+        const defense = data.rb_receiving_defense;
+        if (propKey === "receiving_yards") {
+            allowed = defense?.yards;
+            league = defense?.league_yards;
+        } else {
+            allowed = defense?.receptions;
+            league = defense?.league_receptions;
+        }
+    }
+
+    // Other props do not currently provide a directly
+    // comparable NFL positional baseline in this frontend.
+    if (allowed == null || league == null ||
+        allowed === "" || league === "") return null;
+
+    return trendDirection(allowed, league);
+}
+
+function trendHistorySignal(prop) {
+    const rate = prop.hitRates?.last_5;
+    if (!rate || Number(rate.decided) <= 0) return null;
+
+    const over = Number(rate.over);
+    const under = Number(rate.under);
+
+    if (!Number.isFinite(over) || !Number.isFinite(under)) return null;
+    if (over > under) return "OVER";
+    if (under > over) return "UNDER";
+    return null;
+}
+
+function calculateTrendAgreement(prop) {
+    const signals = [
+        ["Model", trendDirection(prop.projection, prop.line)],
+        ["History", trendHistorySignal(prop)],
+        ["Defense", prop.trendDefense || null]
+    ];
+
+    const available = signals.filter(([, direction]) =>
+        direction === "OVER" || direction === "UNDER"
+    );
+
+    const over = available.filter(([, direction]) =>
+        direction === "OVER"
+    ).length;
+
+    const under = available.filter(([, direction]) =>
+        direction === "UNDER"
+    ).length;
+
+    const count = available.length;
+    const best = Math.max(over, under);
+
+    let direction = null;
+    if (over > under) direction = "OVER";
+    if (under > over) direction = "UNDER";
+
+    let label = "MIXED";
+
+    if (count >= 2 && direction && best >= 2) {
+        label = best + "/" + count + " " + direction;
+    }
+
+    return {label, best, count, direction, signals};
+}
+
+/* Save defensive signal with each new prop snapshot */
+
+const collectEdgesBeforeTrend = collectPlayerEdges;
+
+collectPlayerEdges = function(kind) {
+    const snapshot = collectEdgesBeforeTrend(kind);
+    if (!snapshot) return snapshot;
+
+    const data = kind === "qb"
+        ? qbProjection
+        : projections[kind];
+
+    for (const prop of snapshot.props) {
+        prop.trendDefense = trendDefenseSignal(
+            kind, prop.key, data
+        );
+    }
+
+    return snapshot;
+};
+
+/* Display agreement inside saved History cards */
+
+const renderSavedPropBeforeTrend = renderSavedProp;
+
+renderSavedProp = function(prop) {
+    const box = renderSavedPropBeforeTrend(prop);
+    const agreement = calculateTrendAgreement(prop);
+
+    const heading = historyText(
+        "history-prop-title",
+        "TREND AGREEMENT: " + agreement.label
+    );
+
+    heading.style.marginTop = "12px";
+    heading.style.color =
+        agreement.direction === "OVER" ? "#86efac" :
+        agreement.direction === "UNDER" ? "#fca5a5" :
+        "#fde68a";
+
+    box.append(heading);
+
+    for (const [name, direction] of agreement.signals) {
+        box.append(historyText(
+            "history-meta",
+            name + ": " + (direction || "UNAVAILABLE")
+        ));
+    }
+
+    box.append(historyText(
+        "history-meta",
+        "Agreement uses available signals only. " +
+        "Historical results are not win probabilities."
+    ));
+
+    return box;
+};
+
+/* Sort saved players by strongest agreement */
+
+const renderHistoryBeforeTrend = renderHistory;
+
+renderHistory = function() {
+    const sort = $("historySort");
+
+    if (!sort || sort.value !== "agreement") {
+        renderHistoryBeforeTrend();
+        return;
+    }
+
+    const records = checkHistoryReset();
+
+    const strength = record => {
+        let highest = 0;
+
+        for (const prop of (record.props || [])) {
+            const a = calculateTrendAgreement(prop);
+            const score = a.best >= 2 && a.direction
+                ? a.best * 10 + a.best / Math.max(a.count, 1)
+                : 0;
+
+            highest = Math.max(highest, score);
+        }
+
+        return highest;
+    };
+
+    records.sort((a, b) =>
+        strength(b) - strength(a) ||
+        Number(b.savedAt) - Number(a.savedAt)
+    );
+
+    const root = $("historyCards");
+    root.replaceChildren();
+
+    const totalProps = records.reduce(
+        (sum, item) => sum + (item.props?.length || 0), 0
+    );
+
+    $("historyStatus").textContent =
+        records.length + " saved players | " +
+        totalProps + " saved props";
+
+    $("clearHistoryButton").hidden = records.length === 0;
+
+    if (!records.length) {
+        root.append(historyText(
+            "small",
+            "No saved edges yet."
+        ));
+        return;
+    }
+
+    for (const record of records) {
+        const card = document.createElement("div");
+        card.className = "history-card";
+
+        card.append(
+            historyText(
+                "history-heading",
+                record.player + " (" + record.position + ")"
+            ),
+            historyText(
+                "small",
+                record.offense + " vs. " + record.opponentName
+            ),
+            historyText(
+                "history-meta",
+                "Saved: " + formatHawaiiTime(record.savedAt)
+            )
+        );
+
+        const details = document.createElement("div");
+        details.hidden = true;
+
+        for (const prop of (record.props || [])) {
+            details.append(renderSavedProp(prop));
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "history-actions";
+
+        const view = document.createElement("button");
+        view.className = "secondary-button";
+        view.textContent = "VIEW SAVED RESULTS";
+        view.onclick = () => {
+            details.hidden = !details.hidden;
+            view.textContent = details.hidden
+                ? "VIEW SAVED RESULTS"
+                : "HIDE RESULTS";
+        };
+
+        const remove = document.createElement("button");
+        remove.className = "danger-button";
+        remove.textContent = "REMOVE";
+        remove.onclick = () => removeSavedPlayer(record.id);
+
+        actions.append(view, remove);
+        card.append(actions, details);
+        root.append(card);
+    }
+};
+
 
 </script>
 </body>
