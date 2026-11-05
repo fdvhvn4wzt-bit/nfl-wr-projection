@@ -104,6 +104,20 @@ body{padding:12px}
 .seg button{background:#26364e;margin-top:10px}
 .seg button.on{background:#3b82f6}
 #gameNote{margin:10px 0 4px}
+/* BET BUILDER */
+.mini-btn{width:auto;margin:8px 8px 0 0;padding:10px 14px;font-size:13px;border-radius:9px}
+.builder-add{background:#26364e}
+.builder-add.on{background:#15803d}
+.builder-list{margin:10px 0;padding:10px;border-radius:10px;background:#111c2e}
+.builder-pick{display:flex;align-items:center;gap:8px;margin-top:8px}
+.builder-pick-text{flex:1;min-width:0;font-weight:700;font-size:13px;overflow-wrap:anywhere}
+.builder-pick .chip{margin-right:0;flex:0 0 auto}
+.builder-pick .mini-btn{margin:0;flex:0 0 auto;white-space:nowrap}
+.builder-leg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #34445d}
+.builder-leg-text{min-width:0;overflow-wrap:anywhere}
+.builder-leg .mini-btn{margin:0;flex:0 0 auto}
+textarea{width:100%;margin-top:10px;padding:10px;background:#0d1728;border:1px solid #50617a;border-radius:10px;color:#fff;font-size:14px}
+.slip-pill{position:fixed;right:14px;bottom:18px;width:auto;margin:0;padding:13px 18px;border-radius:999px;background:#2563eb;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:50}
 </style>
 </head>
 <body>
@@ -360,6 +374,27 @@ body{padding:12px}
 
 <!-- HISTORY TAB -->
 <section id="historyPanel" hidden>
+<div class="card" id="builderCard">
+<h2>🧾 Bet Builder</h2>
+<p class="small" id="builderHint">Tap ➕ ADD TO BET on the saved props you are betting. Then copy them into your NFL Prop Tracker sheet.</p>
+<div id="builderLegs"></div>
+<div id="builderForm" hidden>
+<label for="builderStake">Stake ($)</label>
+<input id="builderStake" type="number" inputmode="decimal" min="0" step="0.01" placeholder="e.g. 5">
+<label for="builderOdds">DraftKings parlay odds (optional)</label>
+<input id="builderOdds" type="number" inputmode="numeric" step="1" placeholder="e.g. +450 (leave blank to use the math)">
+<label for="builderNote">Note (optional)</label>
+<input id="builderNote" type="text" maxlength="80" placeholder="e.g. Sunday early games">
+<p class="small" id="builderSummary"></p>
+<p class="history-note" id="builderWarn"></p>
+<button id="copyProps" type="button">1. COPY PROPS ROWS</button>
+<button id="copyBet" type="button">2. COPY BET ROW</button>
+<p class="small">Paste #1 into the Props sheet and #2 into the Bets sheet, each in the first empty cell of column A. Skip #1 for props already in your sheet.</p>
+<button id="builderClear" type="button" class="secondary-button">CLEAR BET</button>
+<p class="small" id="builderMsg" aria-live="polite"></p>
+<textarea id="builderFallback" readonly hidden rows="5"></textarea>
+</div>
+</div>
 <div class="card">
 <h2>🎯 My Saved Edges</h2>
 <p class="small">Your personal DraftKings decision shortlist. Each saved player contains only props with available lines.</p>
@@ -388,6 +423,7 @@ body{padding:12px}
 </div>
 </section>
 
+<button id="builderPill" class="slip-pill" type="button" hidden></button>
 <footer class="small">
 NFL statistics via nflverse (postgame). Live lines require an Odds API key and may not be available for every matchup or player. Projections do not automatically account for injuries, weather, or game script. Confidence labels reflect sample size and consistency, not win probabilities. Edges are model differences, not probabilities.
 </footer>
@@ -3385,6 +3421,517 @@ document.addEventListener("visibilitychange", () => {
 });
 
 loadGames(false);
+
+
+
+/* ==========================================
+   BET BUILDER
+   Pick saved props, then copy ready-to-paste rows for the
+   NFL Prop Tracker spreadsheet (Props sheet and Bets sheet).
+   ========================================== */
+
+const BUILDER_KEY = "nfl_bet_builder_v1";
+const SHEET_PROPS = {
+    receiving_yards: "Receiving Yards",
+    receptions: "Receptions",
+    rushing_yards: "Rushing Yards",
+    rushing_attempts: "Rushing Attempts",
+    passing_yards: "Passing Yards",
+    passing_attempts: "Passing Attempts",
+    passing_completions: "Passing Completions",
+    passing_touchdowns: "Passing TDs",
+    interceptions: "Interceptions"
+};
+const MAX_SHEET_LEGS = 6;
+
+let builderLegs = [];
+try {
+    const stored = JSON.parse(localStorage.getItem(BUILDER_KEY) || "[]");
+    if (Array.isArray(stored)) builderLegs = stored.slice(0, 12);
+} catch (error) {}
+
+function saveBuilder() {
+    try { localStorage.setItem(BUILDER_KEY, JSON.stringify(builderLegs)); } catch (error) {}
+}
+
+function sheetDate() {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Pacific/Honolulu", year: "numeric", month: "2-digit", day: "2-digit"
+    }).format(new Date());
+}
+
+function americanToDecimal(price) {
+    const p = Number(price);
+    if (!Number.isFinite(p) || p === 0) return 1.909;
+    return p > 0 ? 1 + p / 100 : 1 + 100 / Math.abs(p);
+}
+
+function decimalToAmerican(decimal) {
+    if (!(decimal > 1)) return null;
+    return decimal >= 2 ? Math.round((decimal - 1) * 100) : Math.round(-100 / (decimal - 1));
+}
+
+function signed(n) {
+    return n == null ? "" : (n > 0 ? "+" : "") + n;
+}
+
+/* Which NFL week is this game? Only games that have not finished count. */
+function sheetWeek(team, opponentName) {
+    const matches = gameList.filter(game =>
+        (game.away === team && game.home_name === opponentName) ||
+        (game.home === team && game.away_name === opponentName));
+    if (!matches.length) return {week: "", note: "game not found in the schedule"};
+    const earliest = Date.now() - 6 * 3600 * 1000;
+    const upcoming = matches
+        .filter(game => game.kickoff && Date.parse(game.kickoff) >= earliest)
+        .sort((x, y) => Date.parse(x.kickoff) - Date.parse(y.kickoff));
+    if (upcoming.length) return {week: upcoming[0].week, note: ""};
+    return {week: "", note: "that game was already played"};
+}
+
+/* Text that exactly matches the spreadsheet's "Pick Label" formula. */
+function legLabel(leg) {
+    return leg.player + " - " + leg.side + " " + leg.line + " " + leg.prop +
+           (leg.week === "" ? "" : " (Wk " + leg.week + ")");
+}
+
+function parseCardContext(card) {
+    const heading = card.querySelector(".history-heading");
+    const sub = card.querySelector(".small");
+    const headingMatch = heading ? heading.textContent.match(/^(.*) \(([A-Z/]+)\)$/) : null;
+    const parts = sub ? sub.textContent.split(" vs. ") : [];
+    return {
+        player: headingMatch ? headingMatch[1] : "",
+        position: headingMatch ? headingMatch[2] : "",
+        offense: parts[0] || "",
+        opponentName: parts.slice(1).join(" vs. ") || ""
+    };
+}
+
+function legFromProp(context, prop) {
+    const analysis = prop.analysis;
+    const side = analysis && (analysis.side === "OVER" || analysis.side === "UNDER")
+        ? analysis.side
+        : (prop.lean === "OVER" || prop.lean === "UNDER" ? prop.lean : "");
+    const grade = analysis ? finalGrade(prop).grade : "NONE";
+    const found = sheetWeek(context.offense, context.opponentName);
+    const option = Array.from($("defense").options)
+        .find(item => item.textContent === context.opponentName);
+
+    const leg = {
+        id: [context.offense, context.player, prop.key, prop.line, side].join("|").toLowerCase(),
+        player: context.player,
+        team: context.offense,
+        opponent: option ? option.value : context.opponentName,
+        week: found.week,
+        weekNote: found.note,
+        prop: SHEET_PROPS[prop.key] || prop.label,
+        side,
+        line: prop.line,
+        odds: analysis && analysis.side_price != null ? analysis.side_price : "",
+        projection: Number.isFinite(Number(prop.projection)) ? Number(Number(prop.projection).toFixed(2)) : "",
+        ev: analysis && Number.isFinite(Number(analysis.ev)) ? Number(Number(analysis.ev).toFixed(4)) : "",
+        grade: grade === "NONE" ? "" : grade,
+        trend: calculateTrendAgreement(prop).label
+    };
+    return leg;
+}
+
+function inBuilder(id) {
+    return builderLegs.some(leg => leg.id === id);
+}
+
+function toggleLeg(context, prop) {
+    const leg = legFromProp(context, prop);
+    if (inBuilder(leg.id)) {
+        builderLegs = builderLegs.filter(item => item.id !== leg.id);
+    } else {
+        builderLegs.push(leg);
+    }
+    saveBuilder();
+    renderBuilder();
+    refreshAddButtons();
+    updateBuilderPill();
+}
+
+function refreshAddButtons() {
+    for (const button of document.querySelectorAll(".builder-add")) {
+        const on = inBuilder(button.dataset.id);
+        button.textContent = on ? "✓ IN BET" : "➕ ADD";
+        button.classList.toggle("on", on);
+    }
+}
+
+function decorateBuilderButtons() {
+    for (const card of document.querySelectorAll("#historyCards > .history-card")) {
+        const context = parseCardContext(card);
+        const list = document.createElement("div");
+        list.className = "builder-list";
+
+        for (const box of card.querySelectorAll(".history-prop")) {
+            const prop = box._prop;
+            if (!prop || box.hidden) continue;
+
+            const leg = legFromProp(context, prop);
+            const row = document.createElement("div");
+            row.className = "builder-pick";
+
+            const rating = savedRating(prop);
+            const text = document.createElement("span");
+            text.className = "builder-pick-text";
+            text.textContent =
+                leg.side + " " + leg.line + " " + prop.label +
+                (leg.odds !== "" ? " (" + signed(Number(leg.odds)) + ")" : "");
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "mini-btn builder-add";
+            button.dataset.id = leg.id;
+            button.onclick = () => toggleLeg(context, prop);
+
+            row.append(ratingChip(rating, rating === "NONE" ? "-" : rating), text, button);
+            list.append(row);
+        }
+
+        if (list.children.length) {
+            const heading = document.createElement("div");
+            heading.className = "history-meta";
+            heading.textContent = "Pick the props you are betting:";
+            list.prepend(heading);
+            const actions = card.querySelector(".history-actions");
+            card.insertBefore(list, actions);
+        }
+    }
+    refreshAddButtons();
+}
+
+function builderSummary() {
+    const legs = builderLegs;
+    if (!legs.length) return "";
+    const stake = Number($("builderStake").value);
+    const decimal = legs.reduce((product, leg) => product * americanToDecimal(leg.odds), 1);
+    const guessed = legs.filter(leg => leg.odds === "").length;
+
+    let text = legs.length === 1
+        ? "Single bet"
+        : "Parlay of " + legs.length + " legs, about " + signed(decimalToAmerican(decimal)) +
+          " from the saved prices";
+    if (guessed) text += " (" + guessed + " leg" + (guessed === 1 ? " has" : "s have") + " no saved price, so -110 is assumed)";
+    if (stake > 0) text += ". $" + stake.toFixed(2) + " would win about $" + (stake * (decimal - 1)).toFixed(2) + ".";
+    else text += ".";
+
+    const games = new Set(legs.map(leg => leg.team + ">" + leg.opponent));
+    if (legs.length > 1 && games.size < legs.length) {
+        text += " Same-game legs are correlated; check DraftKings' own parlay price.";
+    }
+    if (legs.length > MAX_SHEET_LEGS) {
+        text += " The sheet holds " + MAX_SHEET_LEGS + " legs per bet, so only the first " + MAX_SHEET_LEGS + " go on the bet row.";
+    }
+    return text;
+}
+
+function renderBuilder() {
+    const list = $("builderLegs");
+    if (!list) return;
+    list.replaceChildren();
+
+    $("builderForm").hidden = builderLegs.length === 0;
+    $("builderHint").hidden = builderLegs.length > 0;
+
+    for (const leg of builderLegs) {
+        const row = document.createElement("div");
+        row.className = "builder-leg";
+
+        const text = document.createElement("div");
+        text.className = "builder-leg-text";
+        const title = document.createElement("strong");
+        title.textContent = leg.player + " - " + leg.side + " " + leg.line + " " + leg.prop;
+        const meta = document.createElement("div");
+        meta.className = "history-meta";
+        meta.textContent =
+            leg.team + " vs " + leg.opponent +
+            (leg.week !== "" ? " | Week " + leg.week : " | Week unknown (" + (leg.weekNote || "not found") + ")") +
+            (leg.odds !== "" ? " | " + signed(Number(leg.odds)) : " | no saved price") +
+            (leg.grade ? " | " + leg.grade : "");
+        text.append(title, meta);
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "mini-btn danger-button";
+        remove.textContent = "✕";
+        remove.setAttribute("aria-label", "Remove from bet");
+        remove.onclick = () => {
+            builderLegs = builderLegs.filter(item => item.id !== leg.id);
+            saveBuilder(); renderBuilder(); refreshAddButtons(); updateBuilderPill();
+        };
+
+        row.append(text, remove);
+        list.append(row);
+    }
+
+    $("builderSummary").textContent = builderSummary();
+    const unknown = builderLegs.filter(leg => leg.week === "");
+    $("builderWarn").textContent = unknown.length
+        ? "Week is blank for " + unknown.length + " leg" + (unknown.length === 1 ? "" : "s") +
+          ". The tracker still works, but keep the blank week if you edit it later, or the bet will not find its leg."
+        : "";
+}
+
+function updateBuilderPill() {
+    const pill = $("builderPill");
+    const onHistory = !$("historyPanel").hidden;
+    pill.hidden = !(onHistory && builderLegs.length > 0);
+    pill.textContent = "🧾 Bet (" + builderLegs.length + ")";
+}
+
+function tsv(rows) {
+    return rows.map(row => row.map(cell => String(cell == null ? "" : cell).replace(/[\t\r\n]+/g, " ")).join("\t")).join("\n");
+}
+
+function propsRows() {
+    const date = sheetDate();
+    return builderLegs.map(leg => [
+        date, leg.week, leg.player, leg.team, leg.opponent, leg.prop, leg.side, leg.line,
+        leg.odds, leg.projection, leg.ev, leg.grade, leg.trend, ""
+    ]);
+}
+
+function betRow() {
+    const labels = builderLegs.slice(0, MAX_SHEET_LEGS).map(legLabel);
+    while (labels.length < MAX_SHEET_LEGS) labels.push("");
+    const stake = $("builderStake").value;
+    const odds = $("builderOdds").value;
+    return [sheetDate(), $("builderNote").value.trim(), stake === "" ? "" : Number(stake), ...labels, odds === "" ? "" : Number(odds)];
+}
+
+async function copyText(text) {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            $("builderFallback").hidden = true;
+            return true;
+        }
+    } catch (error) {}
+    try {
+        const box = $("builderFallback");
+        box.hidden = false;
+        box.value = text;
+        box.focus();
+        box.select();
+        box.setSelectionRange(0, text.length);
+        if (document.execCommand("copy")) {
+            box.hidden = true;
+            return true;
+        }
+    } catch (error) {}
+    return false;
+}
+
+async function doCopy(kind) {
+    const message = $("builderMsg");
+    if (!builderLegs.length) { message.textContent = "Add at least one prop first."; return; }
+    if (kind === "bet" && !(Number($("builderStake").value) > 0)) {
+        message.textContent = "Enter your stake first, then copy the bet row.";
+        return;
+    }
+    const text = kind === "props" ? tsv(propsRows()) : tsv([betRow()]);
+    const ok = await copyText(text);
+    message.textContent = ok
+        ? (kind === "props"
+            ? "Copied " + builderLegs.length + " prop row" + (builderLegs.length === 1 ? "" : "s") +
+              ". Paste into the Props sheet: tap the first empty cell in column A, then Paste."
+            : "Copied the bet row. Paste into the Bets sheet: tap the first empty cell in column A, then Paste.")
+        : "Copy was blocked here. Press and hold the text below, choose Select All, then Copy.";
+}
+
+$("copyProps").addEventListener("click", () => doCopy("props"));
+$("copyBet").addEventListener("click", () => doCopy("bet"));
+$("builderClear").addEventListener("click", () => {
+    builderLegs = [];
+    saveBuilder(); renderBuilder(); refreshAddButtons(); updateBuilderPill();
+    $("builderMsg").textContent = "";
+    $("builderFallback").hidden = true;
+});
+for (const id of ["builderStake", "builderOdds", "builderNote"]) {
+    $(id).addEventListener("input", () => { $("builderSummary").textContent = builderSummary(); });
+}
+$("builderPill").addEventListener("click", () => {
+    $("builderCard").scrollIntoView({behavior: "smooth", block: "start"});
+});
+
+/* Hooks: remember each saved prop on its box, add buttons after every render. */
+const renderSavedPropBeforeBuilder = renderSavedProp;
+renderSavedProp = function(prop) {
+    const box = renderSavedPropBeforeBuilder(prop);
+    box._prop = prop;
+    return box;
+};
+
+const renderHistoryBeforeBuilder = renderHistory;
+renderHistory = function() {
+    renderHistoryBeforeBuilder();
+    decorateBuilderButtons();
+    renderBuilder();
+};
+
+const showPanelBeforeBuilder = showPanel;
+showPanel = function(panel) {
+    showPanelBeforeBuilder(panel);
+    updateBuilderPill();
+};
+
+renderBuilder();
+updateBuilderPill();
+
+
+
+/* ==========================================
+   ODDS ACCESS CODE
+   Live DraftKings lookups spend paid Odds API credits, so the server
+   requires an access code. The app asks for it the first time and
+   can remember it on this device. The real lock is on the server.
+   ========================================== */
+
+const ACCESS_CODE_KEY = "nfl_odds_access_code";
+
+function readAccessCode() {
+    try {
+        return sessionStorage.getItem(ACCESS_CODE_KEY) || localStorage.getItem(ACCESS_CODE_KEY) || "";
+    } catch (error) {
+        return "";
+    }
+}
+
+function storeAccessCode(code, remember) {
+    try {
+        sessionStorage.setItem(ACCESS_CODE_KEY, code);
+        if (remember) localStorage.setItem(ACCESS_CODE_KEY, code);
+        else localStorage.removeItem(ACCESS_CODE_KEY);
+    } catch (error) {}
+}
+
+function forgetAccessCode() {
+    try {
+        sessionStorage.removeItem(ACCESS_CODE_KEY);
+        localStorage.removeItem(ACCESS_CODE_KEY);
+    } catch (error) {}
+}
+
+function askAccessCode(message) {
+    return new Promise(resolve => {
+        const overlay = document.createElement("div");
+        overlay.className = "info-modal";
+        overlay.id = "accessModal";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+
+        const box = document.createElement("div");
+        box.className = "info-dialog";
+
+        const title = document.createElement("h2");
+        title.textContent = "🔒 Odds access code";
+
+        const info = document.createElement("p");
+        info.textContent =
+            "Live DraftKings lines use limited paid credits, so this feature is locked. " +
+            "Enter the access code to continue.";
+
+        const error = document.createElement("p");
+        error.style.color = "#fca5a5";
+        error.style.fontWeight = "700";
+        error.textContent = message || "";
+        error.hidden = !message;
+
+        const input = document.createElement("input");
+        input.type = "password";
+        input.autocomplete = "off";
+        input.autocapitalize = "off";
+        input.spellcheck = false;
+        input.placeholder = "Access code";
+        input.setAttribute("aria-label", "Access code");
+
+        const rememberRow = document.createElement("label");
+        rememberRow.style.display = "flex";
+        rememberRow.style.alignItems = "center";
+        rememberRow.style.gap = "10px";
+        const remember = document.createElement("input");
+        remember.type = "checkbox";
+        remember.checked = true;
+        remember.style.width = "auto";
+        remember.style.margin = "0";
+        rememberRow.append(remember, document.createTextNode("Remember on this device"));
+
+        const unlock = document.createElement("button");
+        unlock.type = "button";
+        unlock.textContent = "UNLOCK";
+
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "secondary-button";
+        cancel.textContent = "CANCEL";
+
+        const finish = value => {
+            overlay.remove();
+            document.body.classList.remove("info-open");
+            resolve(value);
+        };
+
+        unlock.onclick = () => {
+            const code = input.value.trim();
+            if (!code) {
+                error.textContent = "Enter the access code.";
+                error.hidden = false;
+                input.focus();
+                return;
+            }
+            finish({code, remember: remember.checked});
+        };
+        cancel.onclick = () => finish(null);
+        input.addEventListener("keydown", event => {
+            if (event.key === "Enter") unlock.click();
+            if (event.key === "Escape") cancel.click();
+        });
+
+        box.append(title, info, error, input, rememberRow, unlock, cancel);
+        overlay.append(box);
+        document.body.append(overlay);
+        document.body.classList.add("info-open");
+        setTimeout(() => input.focus(), 50);
+    });
+}
+
+const jsonFetchBeforeLock = jsonFetch;
+
+jsonFetch = async function(url) {
+    if (!String(url).startsWith("/api/live-odds")) return jsonFetchBeforeLock(url);
+
+    let message = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+        let code = readAccessCode();
+
+        if (!code) {
+            const answer = await askAccessCode(message);
+            if (!answer) throw Error("Live odds cancelled: no access code entered.");
+            code = answer.code;
+            storeAccessCode(code, answer.remember);
+        }
+
+        const response = await fetch(url, {headers: {"X-Access-Code": code}});
+        let data = {};
+        try { data = await response.json(); } catch (error) {}
+
+        if (response.status === 401) {
+            forgetAccessCode();
+            message = "Incorrect access code. Try again.";
+            continue;
+        }
+        if (!response.ok) {
+            throw Error(typeof data.detail === "string" ? data.detail : "Request failed");
+        }
+        return data;
+    }
+    throw Error("Incorrect access code.");
+};
 
 
 </script>
