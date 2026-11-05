@@ -1167,6 +1167,375 @@ def analyze_line(request: Request, team: str, player_name: str, prop: str, line:
             'warnings': warnings, 'notes': notes}
 
 
+# ----------------------------------------------------------------------------
+# Game lines: spread / total / moneyline context and lean (no credits unless fetching)
+# ----------------------------------------------------------------------------
+GAME_SD_MARGIN = 13.5      # typical NFL spread of final margins around the line
+GAME_SD_TOTAL = 10.5       # typical spread of total points around the line
+GAME_MARKET_WEIGHT = .75   # game lines are the sharpest NFL market, so lean on the posted number
+HOME_FIELD = 1.5           # points of margin
+GAME_CACHE_MINUTES = int(os.getenv('GAME_LINES_CACHE_MINUTES', '15'))
+TEAM_BY_NAME = {v: k for k, v in NFL_TEAMS.items()}
+
+
+def _num(x):
+    try:
+        v = float(x)
+        return v if math.isfinite(v) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def game_history():
+    """One row per team per completed game. nflverse stores spread_line from the HOME team's side:
+    positive means the home team was favoured, and home covers when (home - away) > spread_line."""
+    sched = schedule_df()
+    item = cache.get('game_history')
+    if item and item[0] is sched:
+        return item[1]
+    hs, a_s = column(sched, ['home_score']), column(sched, ['away_score'])
+    sl, tl = column(sched, ['spread_line']), column(sched, ['total_line'])
+    hr, ar = column(sched, ['home_rest']), column(sched, ['away_rest'])
+    rows = []
+    if hs and a_s:
+        for _, g in sched.iterrows():
+            h, a = _num(g[hs]), _num(g[a_s])
+            if h is None or a is None or pd.isna(g['_week']):
+                continue
+            line, total_line = (_num(g[sl]) if sl else None), (_num(g[tl]) if tl else None)
+            result = h - a
+            total = h + a
+            ou = None if total_line is None or total == total_line else int(total > total_line)
+            for team, opp, is_home in ((g['_home'], g['_away'], 1), (g['_away'], g['_home'], 0)):
+                margin = result if is_home else -result
+                cover = None
+                if line is not None:
+                    cover = (result - line) if is_home else (line - result)
+                rows.append({
+                    'team': team, 'opp': opp, 'home': is_home, 'week': int(g['_week']),
+                    'pf': h if is_home else a, 'pa': a if is_home else h, 'margin': margin,
+                    'ats': None if cover is None or cover == 0 else int(cover > 0),
+                    'cover_margin': cover, 'over': ou, 'total': total,
+                    'rest': _num(g[hr if is_home else ar]) if (hr and ar) else None})
+    df = pd.DataFrame(rows, columns=['team', 'opp', 'home', 'week', 'pf', 'pa', 'margin', 'ats',
+                                     'cover_margin', 'over', 'total', 'rest'])
+    cache['game_history'] = (sched, df)
+    return df
+
+
+def _record(series):
+    s = series.dropna()
+    w = int((s == 1).sum())
+    return {'w': w, 'l': int((s == 0).sum()), 'rate': (w / len(s)) if len(s) else None}
+
+
+def team_profile(hist, team, before_week, role=None):
+    d = hist[(hist['team'] == team) & (hist['week'] < before_week)].sort_values('week')
+    last = d.tail(5)
+    n = len(d)
+    role_games = d[d['home'] == (1 if role == 'home' else 0)] if role else d.iloc[0:0]
+    return {
+        'games': n,
+        'ppg': float(d['pf'].mean()) if n else None, 'papg': float(d['pa'].mean()) if n else None,
+        'last5_ppg': float(last['pf'].mean()) if len(last) else None,
+        'last5_papg': float(last['pa'].mean()) if len(last) else None,
+        'last5_margin': float(last['margin'].mean()) if len(last) else None,
+        'ats': _record(d['ats']), 'ats_last5': _record(last['ats']),
+        'ats_role': _record(role_games['ats']) if role else None,
+        'ou': {'over': int((d['over'] == 1).sum()), 'under': int((d['over'] == 0).sum())},
+        'ou_last5': {'over': int((last['over'] == 1).sum()), 'under': int((last['over'] == 0).sum())},
+        'last5_total_avg': float(last['total'].mean()) if len(last) else None}
+
+
+def _shrunk(value, n, league):
+    if value is None:
+        return league
+    w = n / (n + 4)
+    return w * value + (1 - w) * league
+
+
+def game_projection(hist, home, away, week):
+    before = hist[hist['week'] < week]
+    league = float(before['pf'].mean()) if len(before) else 22.5
+    hp = team_profile(hist, home, week, 'home')
+    ap = team_profile(hist, away, week, 'away')
+
+    def rating(p, key, last_key):
+        if p[key] is None:
+            return league
+        blend = p[key] * .65 + (p[last_key] if p[last_key] is not None else p[key]) * .35
+        return _shrunk(blend, p['games'], league)
+    h_off, h_def = rating(hp, 'ppg', 'last5_ppg'), rating(hp, 'papg', 'last5_papg')
+    a_off, a_def = rating(ap, 'ppg', 'last5_ppg'), rating(ap, 'papg', 'last5_papg')
+    home_pts = league + (h_off - league) + (a_def - league) + HOME_FIELD / 2
+    away_pts = league + (a_off - league) + (h_def - league) - HOME_FIELD / 2
+    return {'home_pts': round(home_pts, 1), 'away_pts': round(away_pts, 1),
+            'margin': round(home_pts - away_pts, 1), 'total': round(home_pts + away_pts, 1),
+            'league_ppg': round(league, 1)}, hp, ap
+
+
+def two_way(mu, sd, line):
+    """P(over/home side), P(under/away side), P(push) for a whole-number outcome (points) vs a line."""
+    over_min = math.floor(line) + 1
+    under_max = math.ceil(line) - 1
+    p_over = 1 - _ncdf((over_min - .5 - mu) / sd)
+    p_under = _ncdf((under_max + .5 - mu) / sd)
+    return p_over, p_under, max(0.0, 1 - p_over - p_under)
+
+
+def side_ev(p_win, p_push, price):
+    dec = american_to_decimal(price)
+    return p_win * (dec - 1) - (1 - p_win - p_push)
+
+
+def grade_side(prices, probs, names):
+    """Pick the better side by EV. LEAN needs EV >= 2% and a 2-point edge; there is no PLAY for games."""
+    (p1, p2, push), (a, b) = probs, prices
+    ev1, ev2 = side_ev(p1, push, a), side_ev(p2, push, b)
+    if ev1 >= ev2:
+        side, ev, p, price = names[0], ev1, p1, a
+    else:
+        side, ev, p, price = names[1], ev2, p2, b
+    fair = implied_prob(price)
+    edge = (p - fair) * 100
+    return {'side': side, 'ev': round(ev, 4), 'win_prob': round(p, 4), 'edge_pts': round(edge, 1),
+            'rating': 'LEAN' if ev >= .02 and edge >= 2 else 'PASS',
+            'ev_by_side': {names[0]: round(ev1, 4), names[1]: round(ev2, 4)}}
+
+
+def agreement(signals, names):
+    votes = [s['direction'] for s in signals if s['direction'] in names]
+    count = len(votes)
+    best_side = max(names, key=votes.count) if votes else None
+    best = votes.count(best_side) if best_side else 0
+    tie = votes.count(names[0]) == votes.count(names[1])
+    label = 'MIXED'
+    if count >= 2 and best >= 2 and not tie:
+        label = f'{best}/{count} {best_side}'
+    return {'label': label, 'count': count, 'best': best, 'direction': None if tie else best_side}
+
+
+def game_context(sched_row):
+    """Rest, division, roof, temperature and wind where the schedule carries them."""
+    def pick(names):
+        c = column(sched_row.to_frame().T, names)
+        return sched_row[c] if c else None
+    roof = pick(['roof'])
+    roof = None if roof is None or pd.isna(roof) else str(roof).lower()
+    div = pick(['div_game'])
+    return {'home_rest': _num(pick(['home_rest'])), 'away_rest': _num(pick(['away_rest'])),
+            'divisional': None if div is None or pd.isna(div) else bool(int(div)),
+            'roof': roof, 'temp': _num(pick(['temp'])), 'wind': _num(pick(['wind'])),
+            'surface': (None if pick(['surface']) is None or pd.isna(pick(['surface'])) else str(pick(['surface'])))}
+
+
+def find_game(home, away, week):
+    sched = schedule_df()
+    g = sched[(sched['_home'] == home) & (sched['_away'] == away)]
+    if week is not None:
+        g = g[g['_week'] == week]
+    if g.empty:
+        raise HTTPException(404, 'No scheduled game found for those teams.')
+    now = pd.Timestamp.now(tz='UTC')
+    upcoming = g[g['_kickoff'] > now]
+    return (upcoming if not upcoming.empty else g).sort_values('_kickoff').iloc[0]
+
+
+@app.get('/api/game-analysis')
+def game_analysis(home: str, away: str, week: int | None = None,
+                  spread: float | None = None, total: float | None = None,
+                  spread_home_price: float | None = None, spread_away_price: float | None = None,
+                  over_price: float | None = None, under_price: float | None = None,
+                  home_ml: float | None = None, away_ml: float | None = None):
+    """Free (no Odds API credits). `spread` is the HOME team's number as a sportsbook shows it
+    (home -3.5 is entered as -3.5; home +2.5 as 2.5)."""
+    home, away = validate(home, away)
+    for v, n in ((spread_home_price, 'Spread price'), (spread_away_price, 'Spread price'), (over_price, 'Total price'),
+                 (under_price, 'Total price'), (home_ml, 'Moneyline'), (away_ml, 'Moneyline')):
+        check_price(v, n)
+    if spread is not None and not (-40 <= spread <= 40):
+        raise HTTPException(400, 'Spread must be between -40 and 40.')
+    if total is not None and not (20 <= total <= 90):
+        raise HTTPException(400, 'Total must be between 20 and 90.')
+    row = find_game(home, away, week)
+    wk = int(row['_week'])
+    hist = game_history()
+    proj, hp, ap = game_projection(hist, home, away, wk)
+    ctx = game_context(row)
+
+    hs_col, as_col = column(row.to_frame().T, ['home_score']), column(row.to_frame().T, ['away_score'])
+    final = None
+    if hs_col and as_col and _num(row[hs_col]) is not None and _num(row[as_col]) is not None:
+        final = {'home_score': int(row[hs_col]), 'away_score': int(row[as_col])}
+
+    frame = row.to_frame().T
+    sc_, tc_ = column(frame, ['spread_line']), column(frame, ['total_line'])
+    sched_lines = {}
+    if sc_ and _num(row[sc_]) is not None:
+        sched_lines['spread'] = 0.0 - _num(row[sc_])          # back to the sportsbook view of the home number
+    if tc_ and _num(row[tc_]) is not None:
+        sched_lines['total'] = _num(row[tc_])
+    small = min(hp['games'], ap['games']) < 4
+    out = {'season': season(), 'week': wk, 'home': home, 'away': away, 'final': final, 'schedule_lines': sched_lines,
+           'projection': proj, 'context': ctx, 'profiles': {'home': hp, 'away': ap},
+           'small_sample': small, 'spread': None, 'total': None, 'moneyline': None,
+           'notes': ['Game lines are the sharpest NFL market. Treat leans as a second opinion, not a signal to bet.']}
+    if small:
+        out['notes'].append('Fewer than 4 games of data for one team, so projections lean heavily on league averages.')
+
+    w = GAME_MARKET_WEIGHT
+    if spread is not None:
+        market_margin = -spread
+        mu = w * market_margin + (1 - w) * proj['margin']
+        p_home, p_away, push = two_way(mu, GAME_SD_MARGIN, -spread)
+        a, b = spread_home_price if spread_home_price is not None else -110, spread_away_price if spread_away_price is not None else -110
+        g = grade_side((a, b), (p_home, p_away, push), (home, away))
+        if small:
+            g['rating'] = 'PASS'
+        sig = []
+        diff = proj['margin'] - market_margin
+        sig.append({'name': 'Model', 'direction': home if diff >= 1 else away if diff <= -1 else None,
+                    'detail': f"Model margin {home} {proj['margin']:+.1f} vs line {market_margin:+.1f}"})
+        h5, a5 = hp['ats_last5']['rate'], ap['ats_last5']['rate']
+        nh, na = hp['ats_last5']['w'] + hp['ats_last5']['l'], ap['ats_last5']['w'] + ap['ats_last5']['l']
+        d = None
+        if h5 is not None and a5 is not None and nh >= 3 and na >= 3:
+            d = home if h5 - a5 >= .2 else away if a5 - h5 >= .2 else None
+        sig.append({'name': 'Cover form (last 5)', 'direction': d,
+                    'detail': f"{home} {hp['ats_last5']['w']}-{hp['ats_last5']['l']} ATS, {away} {ap['ats_last5']['w']}-{ap['ats_last5']['l']} ATS"})
+        m5 = None
+        if hp['last5_margin'] is not None and ap['last5_margin'] is not None:
+            m5 = (hp['last5_margin'] - ap['last5_margin']) / 2 + HOME_FIELD
+        sig.append({'name': 'Recent margins', 'direction': None if m5 is None else (home if m5 - market_margin >= 1.5 else away if market_margin - m5 >= 1.5 else None),
+                    'detail': '' if m5 is None else f"Last-5 form implies {home} {m5:+.1f} vs line {market_margin:+.1f}"})
+        hr_, ar_ = ctx['home_rest'], ctx['away_rest']
+        rest_dir = None
+        if hr_ is not None and ar_ is not None:
+            rest_dir = home if hr_ - ar_ >= 2 else away if ar_ - hr_ >= 2 else None
+        sig.append({'name': 'Rest', 'direction': rest_dir,
+                    'detail': '' if hr_ is None or ar_ is None else f"{home} {int(hr_)} days, {away} {int(ar_)} days"})
+        out['spread'] = {'line': spread, 'home_price': a, 'away_price': b, 'market_margin': market_margin,
+                         'blended_margin': round(mu, 1), 'home_cover': round(p_home, 4), 'away_cover': round(p_away, 4),
+                         'push': round(push, 4), **g, 'signals': sig, 'agreement': agreement(sig, (home, away))}
+        if final:
+            res = (final['home_score'] - final['away_score']) + spread
+            out['spread']['result'] = 'PUSH' if res == 0 else home if res > 0 else away
+
+    if total is not None:
+        mu = w * total + (1 - w) * proj['total']
+        p_over, p_under, push = two_way(mu, GAME_SD_TOTAL, total)
+        a, b = over_price if over_price is not None else -110, under_price if under_price is not None else -110
+        g = grade_side((a, b), (p_over, p_under, push), ('OVER', 'UNDER'))
+        if small:
+            g['rating'] = 'PASS'
+        sig = []
+        diff = proj['total'] - total
+        sig.append({'name': 'Model', 'direction': 'OVER' if diff >= 1.5 else 'UNDER' if diff <= -1.5 else None,
+                    'detail': f"Model total {proj['total']} vs line {total}"})
+        ho, ao = hp['ou_last5'], ap['ou_last5']
+        games = ho['over'] + ho['under'] + ao['over'] + ao['under']
+        over_rate = (ho['over'] + ao['over']) / games if games else None
+        sig.append({'name': 'Over/Under form (last 5)',
+                    'direction': None if over_rate is None or games < 6 else 'OVER' if over_rate >= .6 else 'UNDER' if over_rate <= .4 else None,
+                    'detail': f"{home} {ho['over']}-{ho['under']} O/U, {away} {ao['over']}-{ao['under']} O/U"})
+        t5 = [x for x in (hp['last5_total_avg'], ap['last5_total_avg']) if x is not None]
+        avg5 = sum(t5) / len(t5) if t5 else None
+        sig.append({'name': 'Recent scoring', 'direction': None if avg5 is None else 'OVER' if avg5 - total >= 2 else 'UNDER' if total - avg5 >= 2 else None,
+                    'detail': '' if avg5 is None else f"Both teams' last-5 games averaged {avg5:.1f} total points"})
+        outdoors = ctx['roof'] in (None, 'outdoors', 'open')
+        wind, temp = ctx['wind'], ctx['temp']
+        bad = outdoors and ((wind is not None and wind >= 15) or (temp is not None and temp <= 25))
+        sig.append({'name': 'Weather', 'direction': 'UNDER' if bad else None,
+                    'detail': ('Dome / closed roof' if ctx['roof'] in ('dome', 'closed') else
+                               'No weather data yet' if wind is None and temp is None else
+                               f"{'' if temp is None else str(int(temp)) + 'F'} {'' if wind is None else str(int(wind)) + ' mph wind'}".strip())})
+        out['total'] = {'line': total, 'over_price': a, 'under_price': b, 'blended_total': round(mu, 1),
+                        'over': round(p_over, 4), 'under': round(p_under, 4), 'push': round(push, 4),
+                        **g, 'signals': sig, 'agreement': agreement(sig, ('OVER', 'UNDER'))}
+        if final:
+            t = final['home_score'] + final['away_score']
+            out['total']['result'] = 'PUSH' if t == total else 'OVER' if t > total else 'UNDER'
+
+    if home_ml is not None and away_ml is not None:
+        mu = w * (-spread if spread is not None else proj['margin']) + (1 - w) * proj['margin']
+        if spread is None:
+            mu = proj['margin']
+        p_home = 1 - _ncdf((0 - mu) / GAME_SD_MARGIN)
+        p_away = 1 - p_home
+        g = grade_side((home_ml, away_ml), (p_home, p_away, 0.0), (home, away))
+        if small:
+            g['rating'] = 'PASS'
+        ih, ia = implied_prob(home_ml), implied_prob(away_ml)
+        out['moneyline'] = {'home_price': home_ml, 'away_price': away_ml, 'home_win': round(p_home, 4),
+                            'away_win': round(p_away, 4), 'market_home': round(ih / (ih + ia), 4),
+                            'market_away': round(ia / (ih + ia), 4), **g}
+        if spread is None:
+            out['notes'].append('No spread entered, so the moneyline uses the model margin only.')
+        if final:
+            out['moneyline']['result'] = home if final['home_score'] > final['away_score'] else away if final['away_score'] > final['home_score'] else 'TIE'
+    return out
+
+
+def parse_game_odds(events):
+    games = []
+    for e in events:
+        home, away = TEAM_BY_NAME.get(e.get('home_team')), TEAM_BY_NAME.get(e.get('away_team'))
+        if not home or not away:
+            continue
+        book = next((b for b in e.get('bookmakers', []) if str(b.get('key', '')).lower() == 'draftkings'), None)
+        if not book:
+            continue
+        g = {'home': home, 'away': away, 'kickoff': e.get('commence_time'), 'updated': book.get('last_update')}
+        for m in book.get('markets', []):
+            outcomes = m.get('outcomes', [])
+            if m.get('key') == 'spreads':
+                for o in outcomes:
+                    if o.get('name') == e.get('home_team'):
+                        g['spread'], g['spread_home_price'] = o.get('point'), o.get('price')
+                    elif o.get('name') == e.get('away_team'):
+                        g['spread_away_price'] = o.get('price')
+            elif m.get('key') == 'totals':
+                for o in outcomes:
+                    if str(o.get('name')).lower() == 'over':
+                        g['total'], g['over_price'] = o.get('point'), o.get('price')
+                    elif str(o.get('name')).lower() == 'under':
+                        g['under_price'] = o.get('price')
+            elif m.get('key') == 'h2h':
+                for o in outcomes:
+                    if o.get('name') == e.get('home_team'):
+                        g['home_ml'] = o.get('price')
+                    elif o.get('name') == e.get('away_team'):
+                        g['away_ml'] = o.get('price')
+        games.append(g)
+    return games
+
+
+@app.get('/api/game-lines')
+def game_lines(request: Request):
+    """Fast fetch: DraftKings spread, total and moneyline for EVERY upcoming game in one call
+    (3 Odds API credits). Locked with the access code and cached to protect credits."""
+    check_access(request)
+    rate_limit(request, 'gamelines', 10)
+    now = datetime.now(timezone.utc)
+    stale = False
+    with odds_lock:
+        saved = cache.get('game_lines')
+        if saved and now < saved[0]:
+            games, fetched = saved[1], saved[2]
+        else:
+            try:
+                events = odds_request('sports/americanfootball_nfl/odds',
+                                      {'bookmakers': 'draftkings', 'markets': 'spreads,totals,h2h', 'oddsFormat': 'american'})
+                games, fetched = parse_game_odds(events), now
+                cache['game_lines'] = (now + timedelta(minutes=GAME_CACHE_MINUTES), games, now)
+            except HTTPException:
+                if not saved or now - saved[2] > timedelta(hours=24):
+                    raise
+                games, fetched, stale = saved[1], saved[2], True
+    return {'games': games, 'updated_at': fetched.isoformat(), 'stale': stale, 'cache_minutes': GAME_CACHE_MINUTES,
+            'credits_note': 'One call covers every game (about 3 credits).'}
+
+
 @app.get('/api/injury-status')
 def injury_status(team: str, player_name: str):
     team = norm_team(team)
