@@ -16,7 +16,7 @@ select,input{width:100%;padding:14px;background:#0d1728;border:1px solid #50617a
 button{background:#3b82f6;color:white;border:0;border-radius:11px;padding:15px;font-weight:700;font-size:15px;width:100%;margin-top:13px;cursor:pointer}
 button:disabled{opacity:.5}
 .tabs,.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.tabs{grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+.tabs{grid-template-columns:repeat(6,minmax(0,1fr));gap:5px}
 .tabs button{background:#26364e;padding:12px 2px;font-size:10px;line-height:1.3;overflow-wrap:anywhere}
 .tabs .active{background:#3b82f6}
 .metric{background:#0d1728;border-radius:11px;padding:13px;min-width:0}
@@ -104,6 +104,32 @@ body{padding:12px}
 .seg button{background:#26364e;margin-top:10px}
 .seg button.on{background:#3b82f6}
 #gameNote{margin:10px 0 4px}
+/* BET BUILDER */
+.mini-btn{width:auto;margin:8px 8px 0 0;padding:10px 14px;font-size:13px;border-radius:9px}
+.builder-add{background:#26364e}
+.builder-add.on{background:#15803d}
+.builder-list{margin:10px 0;padding:10px;border-radius:10px;background:#111c2e}
+.builder-pick{display:flex;align-items:center;gap:8px;margin-top:8px}
+.builder-pick-text{flex:1;min-width:0;font-weight:700;font-size:13px;overflow-wrap:anywhere}
+.builder-pick .chip{margin-right:0;flex:0 0 auto}
+.builder-pick .mini-btn{margin:0;flex:0 0 auto;white-space:nowrap}
+.builder-leg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #34445d}
+.builder-leg-text{min-width:0;overflow-wrap:anywhere}
+.builder-leg .mini-btn{margin:0;flex:0 0 auto}
+textarea{width:100%;margin-top:10px;padding:10px;background:#0d1728;border:1px solid #50617a;border-radius:10px;color:#fff;font-size:14px}
+.slip-pill{position:fixed;right:14px;bottom:18px;width:auto;margin:0;padding:13px 18px;border-radius:999px;background:#2563eb;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:50}/* GAMES TAB */
+.gm-card{margin:12px 0}
+.gm-card h3{margin:0 0 6px}
+.gm-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.gm-top .chip{margin-right:0}
+.gm-sig{display:flex;gap:8px;align-items:baseline;margin-top:6px}
+.gm-sig .chip{flex:0 0 auto;margin-right:0;min-width:70px;text-align:center}
+.gm-sig .small{margin:0}
+.gm-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.gm-actions .mini-btn{margin:0}
+details{margin-top:12px}
+summary{cursor:pointer;margin:8px 0}
+
 </style>
 </head>
 <body>
@@ -119,6 +145,7 @@ body{padding:12px}
 <button id="rushingTab" onclick="showPanel('rushing')">RB PROPS</button>
 <button id="qbTab" onclick="showPanel('qb')">QB PROPS</button>
 <button id="weeklyTab" onclick="showPanel('weekly')">TOP PICKS</button>
+<button id="gamesTab" onclick="showPanel('games')">GAMES</button>
 <button id="historyTab" onclick="showPanel('history')">HISTORY</button>
 </div>
 
@@ -359,7 +386,75 @@ body{padding:12px}
 </section>
 
 <!-- HISTORY TAB -->
+<section id="gamesPanel" hidden>
+<div class="card">
+<h2>🏟️ Game Lines</h2>
+<label for="gmPicker">Pick a Game</label>
+<select id="gmPicker"><option value="">Loading games...</option></select>
+<p class="small" id="gmNote"></p>
+</div>
+<div class="card">
+<h2>Lines</h2>
+<p class="small">Type the numbers from DraftKings, or fetch every game at once. A fetch uses about 3 Odds API credits, needs your access code, and is remembered on this device so switching games costs nothing.</p>
+<button id="gmFetch" type="button">⚡ FETCH ALL GAME LINES (about 3 credits)</button>
+<p class="small" id="gmFetchMsg" aria-live="polite"></p>
+<div class="grid">
+<div>
+<label for="gmFav">Favorite</label>
+<select id="gmFav"></select>
+</div>
+<div>
+<label for="gmSpreadPts">Spread (points)</label>
+<input id="gmSpreadPts" type="text" inputmode="decimal" placeholder="e.g. 3.5">
+</div>
+</div>
+<label for="gmTotal">Total points</label>
+<input id="gmTotal" type="text" inputmode="decimal" placeholder="e.g. 44.5">
+<details>
+<summary class="small">Prices and moneylines (optional, spreads and totals assume -110)</summary>
+<div class="grid">
+<div><label for="gmSpHome" id="gmSpHomeLabel">Spread price (home)</label><input id="gmSpHome" type="text" placeholder="-110"></div>
+<div><label for="gmSpAway" id="gmSpAwayLabel">Spread price (away)</label><input id="gmSpAway" type="text" placeholder="-110"></div>
+<div><label for="gmOver">Over price</label><input id="gmOver" type="text" placeholder="-110"></div>
+<div><label for="gmUnder">Under price</label><input id="gmUnder" type="text" placeholder="-110"></div>
+<div><label for="gmMlHome" id="gmMlHomeLabel">Moneyline (home)</label><input id="gmMlHome" type="text" placeholder="e.g. -170"></div>
+<div><label for="gmMlAway" id="gmMlAwayLabel">Moneyline (away)</label><input id="gmMlAway" type="text" placeholder="e.g. +145"></div>
+</div>
+<p class="small">A favorite has a minus sign, like -170. An underdog can be typed with or without a plus.</p>
+</details>
+<button id="gmSchedule" type="button" class="secondary-button" hidden>USE THE SCHEDULE'S LINES</button>
+<button id="gmClear" type="button" class="secondary-button">CLEAR LINES</button>
+</div>
+<div id="gmResult"></div>
+<div class="card" id="gmSavedCard">
+<h2>📌 Saved Game Picks</h2>
+<p class="small" id="gmSavedSummary"></p>
+<div id="gmSavedList"></div>
+<button id="gmCopyAll" type="button" hidden>COPY ALL FOR SHEET</button>
+<button id="gmClearSettled" type="button" class="secondary-button" hidden>REMOVE SETTLED PICKS</button>
+<p class="small" id="gmSavedMsg" aria-live="polite"></p>
+</div>
+<textarea id="gmFallback" readonly hidden rows="3"></textarea>
+</section>
 <section id="historyPanel" hidden>
+<div class="card" id="builderCard">
+<h2>🧾 Bet Builder</h2>
+<p class="small" id="builderHint">Tap ➕ ADD TO BET on the saved props you are betting. Then copy them into the Picks sheet of your tracker.</p>
+<div id="builderLegs"></div>
+<div id="builderForm" hidden>
+<div hidden>
+<input id="builderStake" type="number"><input id="builderOdds" type="number"><input id="builderNote" type="text">
+</div>
+<p class="small" id="builderSummary"></p>
+<p class="history-note" id="builderWarn"></p>
+<button id="copyProps" type="button">COPY PICKS FOR SHEET</button>
+<button id="copyBet" type="button" hidden>copy bet</button>
+<p class="small">Paste into the first empty cell in column A of the Picks sheet. Then type the Paid and Payout from your DraftKings slip.</p>
+<button id="builderClear" type="button" class="secondary-button">CLEAR BET</button>
+<p class="small" id="builderMsg" aria-live="polite"></p>
+<textarea id="builderFallback" readonly hidden rows="5"></textarea>
+</div>
+</div>
 <div class="card">
 <h2>🎯 My Saved Edges</h2>
 <p class="small">Your personal DraftKings decision shortlist. Each saved player contains only props with available lines.</p>
@@ -388,6 +483,7 @@ body{padding:12px}
 </div>
 </section>
 
+<button id="builderPill" class="slip-pill" type="button" hidden></button>
 <footer class="small">
 NFL statistics via nflverse (postgame). Live lines require an Odds API key and may not be available for every matchup or player. Projections do not automatically account for injuries, weather, or game script. Confidence labels reflect sample size and consistency, not win probabilities. Edges are model differences, not probabilities.
 </footer>
@@ -3385,6 +3481,1258 @@ document.addEventListener("visibilitychange", () => {
 });
 
 loadGames(false);
+
+
+
+/* ==========================================
+   BET BUILDER
+   Pick saved props, then copy ready-to-paste rows for the
+   NFL Prop Tracker spreadsheet (Props sheet and Bets sheet).
+   ========================================== */
+
+const BUILDER_KEY = "nfl_bet_builder_v1";
+const SHEET_PROPS = {
+    receiving_yards: "Receiving Yards",
+    receptions: "Receptions",
+    rushing_yards: "Rushing Yards",
+    rushing_attempts: "Rushing Attempts",
+    passing_yards: "Passing Yards",
+    passing_attempts: "Passing Attempts",
+    passing_completions: "Passing Completions",
+    passing_touchdowns: "Passing TDs",
+    interceptions: "Interceptions"
+};
+const MAX_SHEET_LEGS = 6;
+
+let builderLegs = [];
+try {
+    const stored = JSON.parse(localStorage.getItem(BUILDER_KEY) || "[]");
+    if (Array.isArray(stored)) builderLegs = stored.slice(0, 12);
+} catch (error) {}
+
+function saveBuilder() {
+    try { localStorage.setItem(BUILDER_KEY, JSON.stringify(builderLegs)); } catch (error) {}
+}
+
+function sheetDate() {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Pacific/Honolulu", year: "numeric", month: "2-digit", day: "2-digit"
+    }).format(new Date());
+}
+
+function americanToDecimal(price) {
+    const p = Number(price);
+    if (!Number.isFinite(p) || p === 0) return 1.909;
+    return p > 0 ? 1 + p / 100 : 1 + 100 / Math.abs(p);
+}
+
+function decimalToAmerican(decimal) {
+    if (!(decimal > 1)) return null;
+    return decimal >= 2 ? Math.round((decimal - 1) * 100) : Math.round(-100 / (decimal - 1));
+}
+
+function signed(n) {
+    return n == null ? "" : (n > 0 ? "+" : "") + n;
+}
+
+/* Which NFL week is this game? Only games that have not finished count. */
+function sheetWeek(team, opponentName) {
+    const matches = gameList.filter(game =>
+        (game.away === team && game.home_name === opponentName) ||
+        (game.home === team && game.away_name === opponentName));
+    if (!matches.length) return {week: "", note: "game not found in the schedule"};
+    const earliest = Date.now() - 6 * 3600 * 1000;
+    const upcoming = matches
+        .filter(game => game.kickoff && Date.parse(game.kickoff) >= earliest)
+        .sort((x, y) => Date.parse(x.kickoff) - Date.parse(y.kickoff));
+    if (upcoming.length) return {week: upcoming[0].week, note: ""};
+    return {week: "", note: "that game was already played"};
+}
+
+/* Text that exactly matches the spreadsheet's "Pick Label" formula. */
+function legLabel(leg) {
+    return leg.player + " - " + leg.side + " " + leg.line + " " + leg.prop +
+           (leg.week === "" ? "" : " (Wk " + leg.week + ")");
+}
+
+function parseCardContext(card) {
+    const heading = card.querySelector(".history-heading");
+    const sub = card.querySelector(".small");
+    const headingMatch = heading ? heading.textContent.match(/^(.*) \(([A-Z/]+)\)$/) : null;
+    const parts = sub ? sub.textContent.split(" vs. ") : [];
+    return {
+        player: headingMatch ? headingMatch[1] : "",
+        position: headingMatch ? headingMatch[2] : "",
+        offense: parts[0] || "",
+        opponentName: parts.slice(1).join(" vs. ") || ""
+    };
+}
+
+function legFromProp(context, prop) {
+    const analysis = prop.analysis;
+    const side = analysis && (analysis.side === "OVER" || analysis.side === "UNDER")
+        ? analysis.side
+        : (prop.lean === "OVER" || prop.lean === "UNDER" ? prop.lean : "");
+    const grade = analysis ? finalGrade(prop).grade : "NONE";
+    const found = sheetWeek(context.offense, context.opponentName);
+    const option = Array.from($("defense").options)
+        .find(item => item.textContent === context.opponentName);
+
+    const leg = {
+        id: [context.offense, context.player, prop.key, prop.line, side].join("|").toLowerCase(),
+        player: context.player,
+        team: context.offense,
+        opponent: option ? option.value : context.opponentName,
+        week: found.week,
+        weekNote: found.note,
+        prop: SHEET_PROPS[prop.key] || prop.label,
+        side,
+        line: prop.line,
+        odds: analysis && analysis.side_price != null ? analysis.side_price : "",
+        projection: Number.isFinite(Number(prop.projection)) ? Number(Number(prop.projection).toFixed(2)) : "",
+        ev: analysis && Number.isFinite(Number(analysis.ev)) ? Number(Number(analysis.ev).toFixed(4)) : "",
+        grade: grade === "NONE" ? "" : grade,
+        trend: calculateTrendAgreement(prop).label
+    };
+    return leg;
+}
+
+function inBuilder(id) {
+    return builderLegs.some(leg => leg.id === id);
+}
+
+function toggleLeg(context, prop) {
+    const leg = legFromProp(context, prop);
+    if (inBuilder(leg.id)) {
+        builderLegs = builderLegs.filter(item => item.id !== leg.id);
+    } else {
+        builderLegs.push(leg);
+    }
+    saveBuilder();
+    renderBuilder();
+    refreshAddButtons();
+    updateBuilderPill();
+}
+
+function refreshAddButtons() {
+    for (const button of document.querySelectorAll(".builder-add")) {
+        const on = inBuilder(button.dataset.id);
+        button.textContent = on ? "✓ IN BET" : "➕ ADD";
+        button.classList.toggle("on", on);
+    }
+}
+
+function decorateBuilderButtons() {
+    for (const card of document.querySelectorAll("#historyCards > .history-card")) {
+        const context = parseCardContext(card);
+        const list = document.createElement("div");
+        list.className = "builder-list";
+
+        for (const box of card.querySelectorAll(".history-prop")) {
+            const prop = box._prop;
+            if (!prop || box.hidden) continue;
+
+            const leg = legFromProp(context, prop);
+            const row = document.createElement("div");
+            row.className = "builder-pick";
+
+            const rating = savedRating(prop);
+            const text = document.createElement("span");
+            text.className = "builder-pick-text";
+            text.textContent =
+                leg.side + " " + leg.line + " " + prop.label +
+                (leg.odds !== "" ? " (" + signed(Number(leg.odds)) + ")" : "");
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "mini-btn builder-add";
+            button.dataset.id = leg.id;
+            button.onclick = () => toggleLeg(context, prop);
+
+            row.append(ratingChip(rating, rating === "NONE" ? "-" : rating), text, button);
+            list.append(row);
+        }
+
+        if (list.children.length) {
+            const heading = document.createElement("div");
+            heading.className = "history-meta";
+            heading.textContent = "Pick the props you are betting:";
+            list.prepend(heading);
+            const actions = card.querySelector(".history-actions");
+            card.insertBefore(list, actions);
+        }
+    }
+    refreshAddButtons();
+}
+
+function builderSummary() {
+    const legs = builderLegs;
+    if (!legs.length) return "";
+    const stake = Number($("builderStake").value);
+    const decimal = legs.reduce((product, leg) => product * americanToDecimal(leg.odds), 1);
+    const guessed = legs.filter(leg => leg.odds === "").length;
+
+    let text = legs.length === 1
+        ? "Single bet"
+        : "Parlay of " + legs.length + " legs, about " + signed(decimalToAmerican(decimal)) +
+          " from the saved prices";
+    if (guessed) text += " (" + guessed + " leg" + (guessed === 1 ? " has" : "s have") + " no saved price, so -110 is assumed)";
+    if (stake > 0) text += ". $" + stake.toFixed(2) + " would win about $" + (stake * (decimal - 1)).toFixed(2) + ".";
+    else text += ".";
+
+    const games = new Set(legs.map(leg => leg.team + ">" + leg.opponent));
+    if (legs.length > 1 && games.size < legs.length) {
+        text += " Same-game legs are correlated; check DraftKings' own parlay price.";
+    }
+    if (legs.length > MAX_SHEET_LEGS) {
+        text += " The sheet holds " + MAX_SHEET_LEGS + " legs per bet, so only the first " + MAX_SHEET_LEGS + " go on the bet row.";
+    }
+    return text;
+}
+
+function renderBuilder() {
+    const list = $("builderLegs");
+    if (!list) return;
+    list.replaceChildren();
+
+    $("builderForm").hidden = builderLegs.length === 0;
+    $("builderHint").hidden = builderLegs.length > 0;
+
+    for (const leg of builderLegs) {
+        const row = document.createElement("div");
+        row.className = "builder-leg";
+
+        const text = document.createElement("div");
+        text.className = "builder-leg-text";
+        const title = document.createElement("strong");
+        title.textContent = leg.player + " - " + leg.side + " " + leg.line + " " + leg.prop;
+        const meta = document.createElement("div");
+        meta.className = "history-meta";
+        meta.textContent =
+            leg.team + " vs " + leg.opponent +
+            (leg.week !== "" ? " | Week " + leg.week : " | Week unknown (" + (leg.weekNote || "not found") + ")") +
+            (leg.odds !== "" ? " | " + signed(Number(leg.odds)) : " | no saved price") +
+            (leg.grade ? " | " + leg.grade : "");
+        text.append(title, meta);
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "mini-btn danger-button";
+        remove.textContent = "✕";
+        remove.setAttribute("aria-label", "Remove from bet");
+        remove.onclick = () => {
+            builderLegs = builderLegs.filter(item => item.id !== leg.id);
+            saveBuilder(); renderBuilder(); refreshAddButtons(); updateBuilderPill();
+        };
+
+        row.append(text, remove);
+        list.append(row);
+    }
+
+    $("builderSummary").textContent = builderSummary();
+    const unknown = builderLegs.filter(leg => leg.week === "");
+    $("builderWarn").textContent = unknown.length
+        ? "Week is blank for " + unknown.length + " leg" + (unknown.length === 1 ? "" : "s") +
+          ". The tracker still works, but keep the blank week if you edit it later, or the bet will not find its leg."
+        : "";
+}
+
+function updateBuilderPill() {
+    const pill = $("builderPill");
+    const onHistory = !$("historyPanel").hidden;
+    pill.hidden = !(onHistory && builderLegs.length > 0);
+    pill.textContent = "🧾 Bet (" + builderLegs.length + ")";
+}
+
+function tsv(rows) {
+    return rows.map(row => row.map(cell => String(cell == null ? "" : cell).replace(/[\t\r\n]+/g, " ")).join("\t")).join("\n");
+}
+
+function propsRows() {
+    const date = sheetDate();
+    return builderLegs.map(leg => [
+        date, leg.week, leg.player, leg.prop, leg.side, leg.line,
+        leg.projection, leg.ev === "" ? "" : (leg.ev * 100).toFixed(1) + "%", leg.grade, leg.trend
+    ]);
+}
+
+function betRow() {
+    const labels = builderLegs.slice(0, MAX_SHEET_LEGS).map(legLabel);
+    while (labels.length < MAX_SHEET_LEGS) labels.push("");
+    const stake = $("builderStake").value;
+    const odds = $("builderOdds").value;
+    return [sheetDate(), $("builderNote").value.trim(), stake === "" ? "" : Number(stake), ...labels, odds === "" ? "" : Number(odds)];
+}
+
+async function copyText(text) {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            $("builderFallback").hidden = true;
+            return true;
+        }
+    } catch (error) {}
+    try {
+        const box = $("builderFallback");
+        box.hidden = false;
+        box.value = text;
+        box.focus();
+        box.select();
+        box.setSelectionRange(0, text.length);
+        if (document.execCommand("copy")) {
+            box.hidden = true;
+            return true;
+        }
+    } catch (error) {}
+    return false;
+}
+
+async function doCopy(kind) {
+    const message = $("builderMsg");
+    if (!builderLegs.length) { message.textContent = "Add at least one prop first."; return; }
+    if (kind === "bet" && !(Number($("builderStake").value) > 0)) {
+        message.textContent = "Enter your stake first, then copy the bet row.";
+        return;
+    }
+    const text = kind === "props" ? tsv(propsRows()) : tsv([betRow()]);
+    const ok = await copyText(text);
+    message.textContent = ok
+        ? (kind === "props"
+            ? "Copied " + builderLegs.length + " pick" + (builderLegs.length === 1 ? "" : "s") +
+              ". Paste into the Picks sheet: tap the first empty cell in column A, then Paste."
+            : "Copied the bet row. Paste into the Bets sheet: tap the first empty cell in column A, then Paste.")
+        : "Copy was blocked here. Press and hold the text below, choose Select All, then Copy.";
+}
+
+$("copyProps").addEventListener("click", () => doCopy("props"));
+$("copyBet").addEventListener("click", () => doCopy("bet"));
+$("builderClear").addEventListener("click", () => {
+    builderLegs = [];
+    saveBuilder(); renderBuilder(); refreshAddButtons(); updateBuilderPill();
+    $("builderMsg").textContent = "";
+    $("builderFallback").hidden = true;
+});
+for (const id of ["builderStake", "builderOdds", "builderNote"]) {
+    $(id).addEventListener("input", () => { $("builderSummary").textContent = builderSummary(); });
+}
+$("builderPill").addEventListener("click", () => {
+    $("builderCard").scrollIntoView({behavior: "smooth", block: "start"});
+});
+
+/* Hooks: remember each saved prop on its box, add buttons after every render. */
+const renderSavedPropBeforeBuilder = renderSavedProp;
+renderSavedProp = function(prop) {
+    const box = renderSavedPropBeforeBuilder(prop);
+    box._prop = prop;
+    return box;
+};
+
+const renderHistoryBeforeBuilder = renderHistory;
+renderHistory = function() {
+    renderHistoryBeforeBuilder();
+    decorateBuilderButtons();
+    renderBuilder();
+};
+
+const showPanelBeforeBuilder = showPanel;
+showPanel = function(panel) {
+    showPanelBeforeBuilder(panel);
+    updateBuilderPill();
+};
+
+renderBuilder();
+updateBuilderPill();
+
+
+
+/* ==========================================
+   GAMES TAB
+   Spread, total and moneyline context for one game. Lines are typed in
+   or fetched for every game at once (about 3 Odds API credits, locked with
+   the access code, remembered on this device). The analysis itself is free.
+   ========================================== */
+
+const GM_LINES_KEY = "nfl_game_lines_v1";
+const GM_LAST_KEY = "nfl_games_last";
+let gmGame = null;
+let gmData = null;
+let gmTimer = null;
+let gmSeq = 0;
+let gmLoading = false;
+
+function gmReadStore() {
+    try { return JSON.parse(localStorage.getItem(GM_LINES_KEY) || "{}") || {}; } catch (error) { return {}; }
+}
+
+function gmWriteStore(map) {
+    try {
+        const keys = Object.keys(map);
+        if (keys.length > 120) {
+            keys.sort((a, b) => (map[a].savedAt || 0) - (map[b].savedAt || 0));
+            for (const key of keys.slice(0, keys.length - 120)) delete map[key];
+        }
+        localStorage.setItem(GM_LINES_KEY, JSON.stringify(map));
+    } catch (error) {}
+}
+
+function fillGamesPicker() {
+    const select = $("gmPicker");
+    if (!select) return;
+    const keep = select.value;
+    select.replaceChildren(new Option(
+        gameList.length ? "Choose a game..." : "No games found",
+        ""
+    ));
+
+    const weeks = {};
+    gameList.forEach((game, index) => {
+        (weeks[game.week] = weeks[game.week] || []).push(index);
+    });
+    const all = Object.keys(weeks).map(Number);
+    const hasCurrent = currentWeek != null;
+    const later = hasCurrent ? all.filter(w => w > currentWeek).sort((a, b) => a - b) : [];
+    const earlier = (hasCurrent ? all.filter(w => w < currentWeek) : all).sort((a, b) => b - a);
+    const order = [];
+    if (hasCurrent && weeks[currentWeek]) order.push(currentWeek);
+    order.push(...later, ...earlier);
+
+    for (const week of order) {
+        const group = document.createElement("optgroup");
+        group.label =
+            hasCurrent && week === currentWeek ? "THIS WEEK - Week " + week :
+            hasCurrent && week > currentWeek ? "UPCOMING - Week " + week :
+            "PLAYED - Week " + week;
+        for (const index of weeks[week]) {
+            group.append(new Option(gameLabel(gameList[index]), String(index)));
+        }
+        select.append(group);
+    }
+    if (keep !== "" && gameList[Number(keep)]) select.value = keep;
+}
+
+const buildGamePickerBeforeGames = buildGamePicker;
+buildGamePicker = function() {
+    buildGamePickerBeforeGames();
+    fillGamesPicker();
+    gmRenderSaved();
+};
+
+/* ---------- reading and writing the line boxes ---------- */
+
+function gmNum(id) {
+    const text = $(id).value.trim().replace(/−/g, "-");
+    if (text === "") return null;
+    const value = Number(text);
+    return Number.isFinite(value) ? value : NaN;
+}
+
+function gmPrice(id) {
+    const value = gmNum(id);
+    if (value === null || Number.isNaN(value)) return value;
+    return Math.abs(value) >= 100 ? value : NaN;
+}
+
+function gmReadLines() {
+    const pts = gmNum("gmSpreadPts");
+    let spread = null;
+    if (pts !== null && !Number.isNaN(pts)) {
+        spread = pts === 0 ? 0 : ($("gmFav").value === "home" ? -Math.abs(pts) : Math.abs(pts));
+    }
+    return {
+        spread,
+        total: gmNum("gmTotal"),
+        spreadHome: gmPrice("gmSpHome"),
+        spreadAway: gmPrice("gmSpAway"),
+        over: gmPrice("gmOver"),
+        under: gmPrice("gmUnder"),
+        mlHome: gmPrice("gmMlHome"),
+        mlAway: gmPrice("gmMlAway"),
+        raw: {pts, fav: $("gmFav").value}
+    };
+}
+
+function gmLinesProblem(lines) {
+    const bad = [];
+    if (Number.isNaN(gmNum("gmSpreadPts"))) bad.push("spread");
+    if (Number.isNaN(lines.total)) bad.push("total");
+    for (const [id, name] of [["gmSpHome", "spread price"], ["gmSpAway", "spread price"], ["gmOver", "over price"],
+                              ["gmUnder", "under price"], ["gmMlHome", "moneyline"], ["gmMlAway", "moneyline"]]) {
+        if (Number.isNaN(gmPrice(id))) bad.push(name);
+    }
+    if (lines.spread !== null && Math.abs(lines.spread) > 40) bad.push("spread");
+    if (lines.total !== null && !Number.isNaN(lines.total) && (lines.total < 20 || lines.total > 90)) bad.push("total");
+    return bad.length ? "Check the " + [...new Set(bad)].join(", ") + ". Prices look like -110 or +145." : "";
+}
+
+function gmSetBoxes(saved) {
+    const s = saved || {};
+    $("gmFav").value = s.fav === "away" ? "away" : "home";
+    $("gmSpreadPts").value = s.pts == null ? "" : String(s.pts);
+    $("gmTotal").value = s.total == null ? "" : String(s.total);
+    const prices = {gmSpHome: s.spreadHome, gmSpAway: s.spreadAway, gmOver: s.over, gmUnder: s.under,
+                    gmMlHome: s.mlHome, gmMlAway: s.mlAway};
+    for (const id of Object.keys(prices)) $(id).value = prices[id] == null ? "" : String(prices[id]);
+}
+
+function gmSaveBoxes() {
+    if (!gmGame) return;
+    const lines = gmReadLines();
+    const map = gmReadStore();
+    const empty = [lines.raw.pts, lines.total, lines.spreadHome, lines.spreadAway, lines.over, lines.under,
+                   lines.mlHome, lines.mlAway].every(v => v === null);
+    if (empty) delete map[gameId(gmGame)];
+    else {
+        map[gameId(gmGame)] = {
+            pts: Number.isNaN(lines.raw.pts) ? null : lines.raw.pts, fav: lines.raw.fav,
+            total: Number.isNaN(lines.total) ? null : lines.total,
+            spreadHome: Number.isNaN(lines.spreadHome) ? null : lines.spreadHome,
+            spreadAway: Number.isNaN(lines.spreadAway) ? null : lines.spreadAway,
+            over: Number.isNaN(lines.over) ? null : lines.over,
+            under: Number.isNaN(lines.under) ? null : lines.under,
+            mlHome: Number.isNaN(lines.mlHome) ? null : lines.mlHome,
+            mlAway: Number.isNaN(lines.mlAway) ? null : lines.mlAway,
+            savedAt: Date.now()
+        };
+    }
+    gmWriteStore(map);
+}
+
+/* ---------- picking a game ---------- */
+
+function gmSelect(game) {
+    gmGame = game || null;
+    gmData = null;
+    $("gmResult").replaceChildren();
+    $("gmSchedule").hidden = true;
+    $("gmFetchMsg").textContent = "";
+
+    if (!gmGame) {
+        $("gmNote").textContent = "";
+        gmSetBoxes(null);
+        return;
+    }
+
+    try { localStorage.setItem(GM_LAST_KEY, gameId(gmGame)); } catch (error) {}
+
+    $("gmFav").replaceChildren(
+        new Option(gmGame.home + " (home)", "home"),
+        new Option(gmGame.away + " (away)", "away"));
+    $("gmSpHomeLabel").textContent = "Spread price (" + gmGame.home + ")";
+    $("gmSpAwayLabel").textContent = "Spread price (" + gmGame.away + ")";
+    $("gmMlHomeLabel").textContent = "Moneyline (" + gmGame.home + ")";
+    $("gmMlAwayLabel").textContent = "Moneyline (" + gmGame.away + ")";
+
+    const note = $("gmNote");
+    if (gmGame.status === "final") {
+        note.textContent = "Final: " + gmGame.away + " " + gmGame.away_score + ", " + gmGame.home + " " +
+            gmGame.home_score + ". Team stats below only use games before this week, so this is a fair look-back.";
+        note.style.color = "#fde68a";
+    } else if (gmGame.status === "started") {
+        note.textContent = "This game has kicked off. Lines are usually closed.";
+        note.style.color = "#fde68a";
+    } else {
+        note.textContent = "Week " + gmGame.week + " | Kickoff " + gameTimeText(gmGame.kickoff);
+        note.style.color = "";
+    }
+
+    gmSetBoxes(gmReadStore()[gameId(gmGame)]);
+    gmAnalyze();
+}
+
+/* ---------- running the analysis (free) ---------- */
+
+function gmQuery(lines) {
+    const q = new URLSearchParams({home: gmGame.home, away: gmGame.away, week: String(gmGame.week)});
+    const add = (key, value) => { if (value !== null && value !== undefined && !Number.isNaN(value)) q.set(key, String(value)); };
+    add("spread", lines.spread);
+    add("total", lines.total);
+    add("spread_home_price", lines.spreadHome);
+    add("spread_away_price", lines.spreadAway);
+    add("over_price", lines.over);
+    add("under_price", lines.under);
+    add("home_ml", lines.mlHome);
+    add("away_ml", lines.mlAway);
+    return q.toString();
+}
+
+async function gmAnalyze() {
+    if (!gmGame) return;
+    const lines = gmReadLines();
+    const problem = gmLinesProblem(lines);
+    const seq = ++gmSeq;
+    const box = $("gmResult");
+
+    if (problem) {
+        box.replaceChildren(mk("p", "history-note", problem));
+        return;
+    }
+    if (!box.children.length) box.append(mk("p", "small", "Loading team stats..."));
+
+    try {
+        const data = await jsonFetch("/api/game-analysis?" + gmQuery(lines));
+        if (seq !== gmSeq) return;
+        gmData = data;
+        gmRender(data, lines);
+    } catch (error) {
+        if (seq !== gmSeq) return;
+        box.replaceChildren(mk("p", "history-note", "Game analysis unavailable: " + error.message));
+    }
+}
+
+function gmQueueAnalyze() {
+    gmSaveBoxes();
+    clearTimeout(gmTimer);
+    gmTimer = setTimeout(gmAnalyze, 350);
+}
+
+/* ---------- drawing the results ---------- */
+
+function gmSigned(n) {
+    if (n === null || n === undefined) return "";
+    if (n === 0) return "PK";
+    return (n > 0 ? "+" : "") + n;
+}
+
+function gmPct(x) {
+    return x == null ? "n/a" : Math.round(x * 100) + "%";
+}
+
+function gmEvText(ev) {
+    return (ev > 0 ? "+" : "") + (ev * 100).toFixed(1) + "% EV";
+}
+
+async function gmCopy(text, messageBox) {
+    let ok = false;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            ok = true;
+        }
+    } catch (error) {}
+    if (!ok) {
+        try {
+            const box = $("gmFallback");
+            box.hidden = false;
+            box.value = text;
+            box.focus();
+            box.select();
+            box.setSelectionRange(0, text.length);
+            ok = document.execCommand("copy");
+            if (ok) box.hidden = true;
+        } catch (error) {}
+    }
+    messageBox.textContent = ok
+        ? "Copied. Paste into the first empty cell in column A of the Picks sheet."
+        : "Copy was blocked here. Press and hold the text in the box below, choose Select All, then Copy.";
+}
+
+function gmPickRow(game, week, prop, side, line, projection, market, sideEv, trend) {
+    return [
+        sheetDate(), week, game.away + " @ " + game.home, prop, side, line === null ? "" : line,
+        projection === null ? "" : projection,
+        sideEv === null || sideEv === undefined ? "" : (sideEv * 100).toFixed(1) + "%",
+        side === market.side ? market.rating : "PASS", trend
+    ];
+}
+
+function gmSignals(signals) {
+    const list = mk("div");
+    for (const s of signals) {
+        const row = mk("div", "gm-sig");
+        row.append(mk("span", "chip", s.direction || "no read"));
+        const text = mk("span", "small", s.name + (s.detail ? ": " + s.detail : ""));
+        row.append(text);
+        list.append(row);
+    }
+    return list;
+}
+
+function gmMarketCard(title, subtitle, market, sides, data, prop) {
+    const card = mk("div", "metric gm-card");
+    const head = mk("h3", null, title);
+    card.append(head);
+    if (subtitle) card.append(mk("p", "small", subtitle));
+
+    const top = mk("div", "gm-top");
+    top.append(mk("span", "chip " + (market.rating === "LEAN" ? "rate-lean" : "rate-pass"), market.rating));
+    top.append(mk("strong", null, "Best side: " + market.side + " (" + gmEvText(market.ev) + ")"));
+    card.append(top);
+
+    card.append(mk("p", "small",
+        sides.map(s => s.label + " " + gmPct(s.prob)).join("  |  ") +
+        (market.push ? "  |  Push " + gmPct(market.push) : "")));
+    card.append(mk("p", "small",
+        "Win chance for " + market.side + " " + gmPct(market.win_prob) + ", edge over the price " +
+        (market.edge_pts > 0 ? "+" : "") + market.edge_pts + " pts."));
+
+    if (market.signals) {
+        card.append(mk("div", "label", "AGREEMENT: " + market.agreement.label));
+        card.append(gmSignals(market.signals));
+    }
+    if (market.result) {
+        card.append(mk("p", "history-note", "Result: " + market.result + (market.result === "PUSH" ? "" : " won this market.")));
+    }
+
+    const message = mk("p", "small");
+    message.setAttribute("aria-live", "polite");
+    const actions = mk("div");
+    for (const s of sides) {
+        const pick = mk("div", "builder-pick");
+        pick.append(mk("span", "builder-pick-text", s.label));
+        const save = mk("button", "mini-btn builder-add", "SAVE");
+        save.type = "button";
+        const record = () => ({
+            id: gameId(data.game) + "|" + prop + "|" + s.side,
+            gameId: gameId(data.game), week: data.week, home: data.home, away: data.away,
+            prop, side: s.side, label: s.label, line: s.line, projection: s.projection,
+            ev: market.ev_by_side[s.side], grade: s.side === market.side ? market.rating : "PASS",
+            trend: market.agreement ? market.agreement.label : "", date: sheetDate(), savedAt: Date.now()
+        });
+        const paint = () => {
+            const on = gmIsSaved(gameId(data.game) + "|" + prop + "|" + s.side);
+            save.classList.toggle("on", on);
+            save.textContent = on ? "SAVED ✓" : "SAVE";
+        };
+        save.onclick = () => {
+            const id = gameId(data.game) + "|" + prop + "|" + s.side;
+            if (gmIsSaved(id)) {
+                gmUnsave(id);
+                message.textContent = "Removed from Saved Game Picks.";
+            } else {
+                gmSavePick(record());
+                message.textContent = "Saved with today's line. Find it under Saved Game Picks below.";
+            }
+            paint();
+        };
+        paint();
+        const copy = mk("button", "mini-btn secondary-button", "COPY");
+        copy.type = "button";
+        copy.onclick = () => {
+            const row = gmPickRow(data.game, data.week, prop, s.side, s.line, s.projection, market,
+                                  market.ev_by_side[s.side], market.agreement ? market.agreement.label : "");
+            gmCopy(tsv([row]), message);
+        };
+        pick.append(save, copy);
+        actions.append(pick);
+    }
+    card.append(actions, message);
+    return card;
+}
+
+function gmTeamBlock(team, p, role) {
+    const box = mk("div", "metric gm-card");
+    box.append(mk("h3", null, team + (role === "home" ? " (home)" : " (away)")));
+    if (!p.games) {
+        box.append(mk("p", "small", "No games played yet."));
+        return box;
+    }
+    const f1 = x => x == null ? "n/a" : x.toFixed(1);
+    const rec = r => r.w + "-" + r.l;
+    box.append(mk("p", "small",
+        "Scores " + f1(p.ppg) + ", allows " + f1(p.papg) + " per game (" + p.games + " games). " +
+        "Last 5: " + f1(p.last5_ppg) + " scored, " + f1(p.last5_papg) + " allowed."));
+    box.append(mk("p", "small",
+        "Against the spread: " + rec(p.ats) + " (last 5: " + rec(p.ats_last5) + "). " +
+        (p.ats_role ? (role === "home" ? "At home: " : "On the road: ") + rec(p.ats_role) + ". " : "") +
+        "Overs-unders: " + p.ou.over + "-" + p.ou.under + " (last 5: " + p.ou_last5.over + "-" + p.ou_last5.under + ")."));
+    return box;
+}
+
+function gmRender(data, lines) {
+    const box = $("gmResult");
+    box.replaceChildren();
+    data.game = gmGame;
+
+    const home = data.home, away = data.away;
+    const proj = data.projection;
+
+    /* the schedule's own numbers, for look-backs and a quick start */
+    const sched = data.schedule_lines || {};
+    const button = $("gmSchedule");
+    const haveLines = lines.spread !== null || lines.total !== null;
+    if (!haveLines && (sched.spread != null || sched.total != null)) {
+        button.hidden = false;
+        button.textContent = "USE THE SCHEDULE'S LINES" +
+            (sched.spread != null ? " (" + home + " " + gmSigned(sched.spread) : " (") +
+            (sched.total != null ? (sched.spread != null ? ", " : "") + "total " + sched.total : "") + ")";
+    } else {
+        button.hidden = true;
+    }
+
+    /* model view */
+    const model = mk("div", "card");
+    model.append(mk("h2", null, "📊 Model view"));
+    const favored = proj.margin >= 0 ? home : away;
+    model.append(mk("p", null,
+        away + " " + proj.away_pts + "  -  " + home + " " + proj.home_pts +
+        "   (" + favored + " by " + Math.abs(proj.margin).toFixed(1) + ", total " + proj.total + ")"));
+    model.append(mk("p", "small",
+        "Built from points scored and allowed (season and last 5), shrunk toward the league average of " +
+        proj.league_ppg + ", plus home field. Game lines are the sharpest market, so the lean blends in the posted number heavily."));
+    if (data.final) {
+        model.append(mk("p", "history-note", "Final score: " + away + " " + data.final.away_score + ", " + home + " " + data.final.home_score + "."));
+    }
+    box.append(model);
+
+    if (!haveLines) {
+        box.append(mk("p", "small", "Enter a spread, total or moneyline above to see win chances, EV and the lean."));
+    }
+
+    /* markets */
+    const markets = mk("div", "card");
+    let any = false;
+    markets.append(mk("h2", null, "🎯 Leans"));
+
+    if (data.spread) {
+        any = true;
+        const m = data.spread;
+        const homeLine = m.line;
+        const awayLine = m.line === 0 ? 0 : -m.line;
+        markets.append(gmMarketCard(
+            "Spread: " + home + " " + gmSigned(homeLine),
+            "Model margin " + home + " " + gmSigned(proj.margin) + ". Blended with the market: " + home + " " + gmSigned(m.blended_margin) + ".",
+            m,
+            [{label: home + " " + gmSigned(homeLine), side: home, prob: m.home_cover, line: homeLine, projection: proj.margin},
+             {label: away + " " + gmSigned(awayLine), side: away, prob: m.away_cover, line: awayLine, projection: -proj.margin}],
+            data, "Spread"));
+    }
+    if (data.total) {
+        any = true;
+        const m = data.total;
+        markets.append(gmMarketCard(
+            "Total: " + m.line,
+            "Model total " + proj.total + ". Blended with the market: " + m.blended_total + ".",
+            m,
+            [{label: "OVER " + m.line, side: "OVER", prob: m.over, line: m.line, projection: proj.total},
+             {label: "UNDER " + m.line, side: "UNDER", prob: m.under, line: m.line, projection: proj.total}],
+            data, "Total"));
+    }
+    if (data.moneyline) {
+        any = true;
+        const m = data.moneyline;
+        markets.append(gmMarketCard(
+            "Moneyline: " + home + " " + fmtPrice(m.home_price) + " / " + away + " " + fmtPrice(m.away_price),
+            "Market win chance (no vig): " + home + " " + gmPct(m.market_home) + ", " + away + " " + gmPct(m.market_away) + ".",
+            m,
+            [{label: home + " " + fmtPrice(m.home_price), side: home, prob: m.home_win, line: null, projection: proj.margin},
+             {label: away + " " + fmtPrice(m.away_price), side: away, prob: m.away_win, line: null, projection: -proj.margin}],
+            data, "Moneyline"));
+    }
+    if (any) {
+        markets.append(mk("p", "small",
+            "Entering results in the sheet: Actual for a spread or moneyline is the picked team's final margin (their score minus the other team's). " +
+            "For a total, it is the combined points. There is no PLAY for games. LEAN needs +2% EV and a 2-point edge."));
+        box.append(markets);
+    }
+
+    /* situation */
+    const ctx = data.context || {};
+    const bits = [];
+    if (ctx.home_rest != null && ctx.away_rest != null) bits.push("Rest: " + home + " " + ctx.home_rest + " days, " + away + " " + ctx.away_rest + " days");
+    if (ctx.divisional) bits.push("Divisional game");
+    if (ctx.roof) bits.push("Roof: " + ctx.roof);
+    if (ctx.temp != null) bits.push(Math.round(ctx.temp) + "F");
+    if (ctx.wind != null) bits.push(Math.round(ctx.wind) + " mph wind");
+    if (ctx.surface) bits.push(ctx.surface);
+
+    const stats = mk("div", "card");
+    stats.append(mk("h2", null, "🔎 Situation and team stats"));
+    stats.append(mk("p", "small", bits.length ? bits.join(" | ") : "No rest, roof or weather data in the schedule yet."));
+    stats.append(gmTeamBlock(home, data.profiles.home, "home"));
+    stats.append(gmTeamBlock(away, data.profiles.away, "away"));
+    for (const note of data.notes || []) stats.append(mk("p", "history-note", note));
+    box.append(stats);
+}
+
+/* ---------- saved game picks (kept on this device) ---------- */
+
+const GM_SAVED_KEY = "nfl_saved_games_v1";
+
+function gmReadSaved() {
+    try {
+        const list = JSON.parse(localStorage.getItem(GM_SAVED_KEY) || "[]");
+        return Array.isArray(list) ? list : [];
+    } catch (error) { return []; }
+}
+
+function gmWriteSaved(list) {
+    try { localStorage.setItem(GM_SAVED_KEY, JSON.stringify(list.slice(-300))); } catch (error) {}
+}
+
+function gmIsSaved(id) {
+    return gmReadSaved().some(p => p.id === id);
+}
+
+function gmSavePick(record) {
+    const list = gmReadSaved().filter(p => p.id !== record.id);
+    list.push(record);
+    gmWriteSaved(list);
+    gmRenderSaved();
+}
+
+function gmUnsave(id) {
+    gmWriteSaved(gmReadSaved().filter(p => p.id !== id));
+    gmRenderSaved();
+}
+
+/* Grade a saved pick from the final score already loaded with the schedule. */
+function gmSettle(p) {
+    const game = gameList.find(g => gameId(g) === p.gameId);
+    if (!game || game.status !== "final" || game.home_score == null || game.away_score == null) {
+        return {result: "PENDING", actual: ""};
+    }
+    const hs = Number(game.home_score), as = Number(game.away_score);
+    if (p.prop === "Total") {
+        const total = hs + as;
+        const result = total === p.line ? "PUSH" : (p.side === "OVER") === (total > p.line) ? "HIT" : "MISS";
+        return {result, actual: total};
+    }
+    const margin = p.side === game.home ? hs - as : as - hs;
+    const score = p.prop === "Spread" ? margin + p.line : margin;
+    return {result: score === 0 ? "PUSH" : score > 0 ? "HIT" : "MISS", actual: margin};
+}
+
+function gmSavedRow(p, actual) {
+    return [p.date, p.week, p.away + " @ " + p.home, p.prop, p.side, p.line == null ? "" : p.line,
+            p.projection == null ? "" : p.projection,
+            p.ev == null ? "" : (p.ev * 100).toFixed(1) + "%", p.grade, p.trend, "", "", actual];
+}
+
+function gmRenderSaved() {
+    const box = $("gmSavedList");
+    if (!box) return;
+    const list = gmReadSaved().sort((a, b) => b.savedAt - a.savedAt);
+    box.replaceChildren();
+
+    const tally = {};
+    let hit = 0, miss = 0, push = 0;
+    const settled = list.map(p => ({p, s: gmSettle(p)}));
+    for (const {p, s} of settled) {
+        if (s.result === "PENDING") continue;
+        if (s.result === "PUSH") { push++; continue; }
+        const t = tally[p.grade] = tally[p.grade] || {w: 0, l: 0};
+        if (s.result === "HIT") { hit++; t.w++; } else { miss++; t.l++; }
+    }
+    $("gmSavedSummary").textContent = !list.length
+        ? "Tap SAVE on a side above to keep it here. Finished games grade themselves."
+        : "Settled " + hit + "-" + miss + (push ? "-" + push : "") +
+          (hit + miss ? " (" + Math.round(hit / (hit + miss) * 100) + "%)" : "") +
+          Object.keys(tally).map(g => " | " + g + " " + tally[g].w + "-" + tally[g].l).join("") +
+          " | Pending " + settled.filter(x => x.s.result === "PENDING").length;
+    $("gmCopyAll").hidden = !list.length;
+    $("gmClearSettled").hidden = !settled.some(x => x.s.result !== "PENDING");
+
+    for (const {p, s} of settled) {
+        const item = mk("div", "metric gm-card");
+        const head = mk("div", "gm-top");
+        head.append(mk("span", "chip rate-" + (p.grade === "LEAN" ? "lean" : "pass"), p.grade));
+        head.append(mk("span", "chip " + (s.result === "HIT" ? "play" : s.result === "MISS" ? "pass" : ""), s.result));
+        head.append(mk("strong", null, p.prop + ": " + p.label));
+        item.append(head);
+        item.append(mk("p", "small",
+            p.away + " @ " + p.home + " | Week " + p.week + " | saved " + p.date +
+            (p.ev != null ? " | " + gmEvText(p.ev) : "") + (p.trend ? " | Trend " + p.trend : "")));
+        if (s.result !== "PENDING") {
+            item.append(mk("p", "small", "Final margin/total used: " + s.actual));
+        }
+        const row = mk("div");
+        const open = mk("button", "mini-btn secondary-button", "OPEN GAME");
+        open.type = "button";
+        open.onclick = () => {
+            const g = gameList.find(x => gameId(x) === p.gameId);
+            if (!g) return;
+            $("gmPicker").value = String(gameList.indexOf(g));
+            gmSelect(g);
+            window.scrollTo({top: 0, behavior: "smooth"});
+        };
+        const copy = mk("button", "mini-btn secondary-button", "COPY");
+        copy.type = "button";
+        copy.onclick = () => gmCopy(tsv([gmSavedRow(p, s.actual)]), $("gmSavedMsg"));
+        const remove = mk("button", "mini-btn secondary-button", "REMOVE");
+        remove.type = "button";
+        remove.onclick = () => gmUnsave(p.id);
+        row.append(open, copy, remove);
+        item.append(row);
+        box.append(item);
+    }
+}
+
+$("gmCopyAll").addEventListener("click", () => {
+    const rows = gmReadSaved().sort((a, b) => a.savedAt - b.savedAt).map(p => gmSavedRow(p, gmSettle(p).actual));
+    gmCopy(tsv(rows), $("gmSavedMsg"));
+});
+
+$("gmClearSettled").addEventListener("click", () => {
+    const keep = gmReadSaved().filter(p => gmSettle(p).result === "PENDING");
+    gmWriteSaved(keep);
+    gmRenderSaved();
+    $("gmSavedMsg").textContent = "Removed settled picks. Copy them to your sheet first if you want a record.";
+});
+
+/* ---------- fetching every game's lines at once ---------- */
+
+async function gmFetch() {
+    if (gmLoading) return;
+    gmLoading = true;
+    const message = $("gmFetchMsg");
+    const button = $("gmFetch");
+    button.disabled = true;
+    message.textContent = "Fetching DraftKings lines...";
+    try {
+        const data = await jsonFetch("/api/game-lines");
+        const map = gmReadStore();
+        let stored = 0;
+        for (const g of data.games || []) {
+            const options = gameList.filter(x => x.home === g.home && x.away === g.away && x.status !== "final");
+            options.sort((a, b) => String(a.kickoff).localeCompare(String(b.kickoff)));
+            const game = options[0];
+            if (!game) continue;
+            const spread = g.spread;
+            map[gameId(game)] = {
+                pts: spread == null ? null : Math.abs(spread),
+                fav: spread != null && spread > 0 ? "away" : "home",
+                total: g.total == null ? null : g.total,
+                spreadHome: g.spread_home_price ?? null, spreadAway: g.spread_away_price ?? null,
+                over: g.over_price ?? null, under: g.under_price ?? null,
+                mlHome: g.home_ml ?? null, mlAway: g.away_ml ?? null,
+                savedAt: Date.now()
+            };
+            stored++;
+        }
+        gmWriteStore(map);
+        const mine = gmGame ? map[gameId(gmGame)] : null;
+        message.textContent =
+            "Saved lines for " + stored + " game" + (stored === 1 ? "" : "s") + " on this device" +
+            (data.stale ? " (older data, the refresh failed)" : "") + ". Updated " +
+            new Date(data.updated_at).toLocaleTimeString("en-US", {timeZone: "Pacific/Honolulu", hour: "numeric", minute: "2-digit"}) +
+            " HST. Switching games now costs nothing." +
+            (gmGame && !mine ? " No line is posted yet for the game you picked." : "");
+        if (mine) {
+            gmSetBoxes(mine);
+            gmAnalyze();
+        }
+    } catch (error) {
+        message.textContent = error.message;
+    } finally {
+        gmLoading = false;
+        button.disabled = false;
+    }
+}
+
+/* ---------- wiring ---------- */
+
+$("gmPicker").addEventListener("change", () => {
+    const value = $("gmPicker").value;
+    gmSelect(value === "" ? null : gameList[Number(value)]);
+});
+
+for (const id of ["gmFav", "gmSpreadPts", "gmTotal", "gmSpHome", "gmSpAway", "gmOver", "gmUnder", "gmMlHome", "gmMlAway"]) {
+    $(id).addEventListener("input", gmQueueAnalyze);
+    $(id).addEventListener("change", gmQueueAnalyze);
+}
+
+$("gmFetch").addEventListener("click", gmFetch);
+
+$("gmSchedule").addEventListener("click", () => {
+    if (!gmData || !gmData.schedule_lines) return;
+    const s = gmData.schedule_lines;
+    const saved = {fav: "home"};
+    if (s.spread != null) { saved.pts = Math.abs(s.spread); saved.fav = s.spread > 0 ? "away" : "home"; }
+    if (s.total != null) saved.total = s.total;
+    gmSetBoxes(saved);
+    gmSaveBoxes();
+    gmAnalyze();
+});
+
+$("gmClear").addEventListener("click", () => {
+    gmSetBoxes(null);
+    gmSaveBoxes();
+    gmAnalyze();
+});
+
+function gmEnter() {
+    const open = () => {
+        fillGamesPicker();
+        if (gmGame) return;
+        let target = null;
+        try {
+            const id = localStorage.getItem(GM_LAST_KEY);
+            target = gameList.find(game => gameId(game) === id) || null;
+        } catch (error) {}
+        if (!target && selectedGame) target = selectedGame;
+        if (target) {
+            $("gmPicker").value = String(gameList.indexOf(target));
+            gmSelect(target);
+        }
+    };
+    if (gameList.length) open();
+    else loadGames(true).then(open);
+}
+
+const showPanelBeforeGames = showPanel;
+showPanel = function(panel) {
+    showPanelBeforeGames(panel);
+    const on = panel === "games";
+    $("gamesPanel").hidden = !on;
+    $("gamesTab").classList.toggle("active", on);
+    if (on) {
+        $("matchupSelector").hidden = true;
+        gmEnter();
+    }
+};
+
+fillGamesPicker();
+gmRenderSaved();
+
+
+
+/* ==========================================
+   ODDS ACCESS CODE
+   Live DraftKings lookups spend paid Odds API credits, so the server
+   requires an access code. The app asks for it the first time and
+   can remember it on this device. The real lock is on the server.
+   ========================================== */
+
+const ACCESS_CODE_KEY = "nfl_odds_access_code";
+
+function readAccessCode() {
+    try {
+        return sessionStorage.getItem(ACCESS_CODE_KEY) || localStorage.getItem(ACCESS_CODE_KEY) || "";
+    } catch (error) {
+        return "";
+    }
+}
+
+function storeAccessCode(code, remember) {
+    try {
+        sessionStorage.setItem(ACCESS_CODE_KEY, code);
+        if (remember) localStorage.setItem(ACCESS_CODE_KEY, code);
+        else localStorage.removeItem(ACCESS_CODE_KEY);
+    } catch (error) {}
+}
+
+function forgetAccessCode() {
+    try {
+        sessionStorage.removeItem(ACCESS_CODE_KEY);
+        localStorage.removeItem(ACCESS_CODE_KEY);
+    } catch (error) {}
+}
+
+function askAccessCode(message) {
+    return new Promise(resolve => {
+        const overlay = document.createElement("div");
+        overlay.className = "info-modal";
+        overlay.id = "accessModal";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+
+        const box = document.createElement("div");
+        box.className = "info-dialog";
+
+        const title = document.createElement("h2");
+        title.textContent = "🔒 Odds access code";
+
+        const info = document.createElement("p");
+        info.textContent =
+            "Live DraftKings lines use limited paid credits, so this feature is locked. " +
+            "Enter the access code to continue.";
+
+        const error = document.createElement("p");
+        error.style.color = "#fca5a5";
+        error.style.fontWeight = "700";
+        error.textContent = message || "";
+        error.hidden = !message;
+
+        const input = document.createElement("input");
+        input.type = "password";
+        input.autocomplete = "off";
+        input.autocapitalize = "off";
+        input.spellcheck = false;
+        input.placeholder = "Access code";
+        input.setAttribute("aria-label", "Access code");
+
+        const rememberRow = document.createElement("label");
+        rememberRow.style.display = "flex";
+        rememberRow.style.alignItems = "center";
+        rememberRow.style.gap = "10px";
+        const remember = document.createElement("input");
+        remember.type = "checkbox";
+        remember.checked = true;
+        remember.style.width = "auto";
+        remember.style.margin = "0";
+        rememberRow.append(remember, document.createTextNode("Remember on this device"));
+
+        const unlock = document.createElement("button");
+        unlock.type = "button";
+        unlock.textContent = "UNLOCK";
+
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "secondary-button";
+        cancel.textContent = "CANCEL";
+
+        const finish = value => {
+            overlay.remove();
+            document.body.classList.remove("info-open");
+            resolve(value);
+        };
+
+        unlock.onclick = () => {
+            const code = input.value.trim();
+            if (!code) {
+                error.textContent = "Enter the access code.";
+                error.hidden = false;
+                input.focus();
+                return;
+            }
+            finish({code, remember: remember.checked});
+        };
+        cancel.onclick = () => finish(null);
+        input.addEventListener("keydown", event => {
+            if (event.key === "Enter") unlock.click();
+            if (event.key === "Escape") cancel.click();
+        });
+
+        box.append(title, info, error, input, rememberRow, unlock, cancel);
+        overlay.append(box);
+        document.body.append(overlay);
+        document.body.classList.add("info-open");
+        setTimeout(() => input.focus(), 50);
+    });
+}
+
+const jsonFetchBeforeLock = jsonFetch;
+
+jsonFetch = async function(url) {
+    if (!["/api/live-odds", "/api/game-lines"].some(path => String(url).startsWith(path))) return jsonFetchBeforeLock(url);
+
+    let message = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+        let code = readAccessCode();
+
+        if (!code) {
+            const answer = await askAccessCode(message);
+            if (!answer) throw Error("Live odds cancelled: no access code entered.");
+            code = answer.code;
+            storeAccessCode(code, answer.remember);
+        }
+
+        const response = await fetch(url, {headers: {"X-Access-Code": code}});
+        let data = {};
+        try { data = await response.json(); } catch (error) {}
+
+        if (response.status === 401) {
+            forgetAccessCode();
+            message = "Incorrect access code. Try again.";
+            continue;
+        }
+        if (!response.ok) {
+            throw Error(typeof data.detail === "string" ? data.detail : "Request failed");
+        }
+        return data;
+    }
+    throw Error("Incorrect access code.");
+};
 
 
 </script>
