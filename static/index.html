@@ -3692,7 +3692,7 @@ function propsRows() {
     const date = sheetDate();
     return builderLegs.map(leg => [
         date, leg.week, leg.player, leg.team, leg.opponent, leg.prop, leg.side, leg.line,
-        leg.odds, leg.projection, leg.ev, leg.grade, leg.trend, ""
+        leg.odds, leg.projection, leg.ev === "" ? "" : (leg.ev * 100).toFixed(1) + "%", leg.grade, leg.trend, ""
     ]);
 }
 
