@@ -426,6 +426,14 @@ summary{cursor:pointer;margin:8px 0}
 <button id="gmClear" type="button" class="secondary-button">CLEAR LINES</button>
 </div>
 <div id="gmResult"></div>
+<div class="card" id="gmSavedCard">
+<h2>📌 Saved Game Picks</h2>
+<p class="small" id="gmSavedSummary"></p>
+<div id="gmSavedList"></div>
+<button id="gmCopyAll" type="button" hidden>COPY ALL FOR SHEET</button>
+<button id="gmClearSettled" type="button" class="secondary-button" hidden>REMOVE SETTLED PICKS</button>
+<p class="small" id="gmSavedMsg" aria-live="polite"></p>
+</div>
 <textarea id="gmFallback" readonly hidden rows="3"></textarea>
 </section>
 <section id="historyPanel" hidden>
@@ -3906,6 +3914,7 @@ const buildGamePickerBeforeGames = buildGamePicker;
 buildGamePicker = function() {
     buildGamePickerBeforeGames();
     fillGamesPicker();
+    gmRenderSaved();
 };
 
 /* ---------- reading and writing the line boxes ---------- */
@@ -4166,17 +4175,45 @@ function gmMarketCard(title, subtitle, market, sides, data, prop) {
 
     const message = mk("p", "small");
     message.setAttribute("aria-live", "polite");
-    const actions = mk("div", "gm-actions");
+    const actions = mk("div");
     for (const s of sides) {
-        const button = mk("button", "mini-btn" + (s.label === market.side || s.side === market.side ? "" : " secondary-button"),
-                          "COPY " + s.label);
-        button.type = "button";
-        button.onclick = () => {
+        const pick = mk("div", "builder-pick");
+        pick.append(mk("span", "builder-pick-text", s.label));
+        const save = mk("button", "mini-btn builder-add", "SAVE");
+        save.type = "button";
+        const record = () => ({
+            id: gameId(data.game) + "|" + prop + "|" + s.side,
+            gameId: gameId(data.game), week: data.week, home: data.home, away: data.away,
+            prop, side: s.side, label: s.label, line: s.line, projection: s.projection,
+            ev: market.ev_by_side[s.side], grade: s.side === market.side ? market.rating : "PASS",
+            trend: market.agreement ? market.agreement.label : "", date: sheetDate(), savedAt: Date.now()
+        });
+        const paint = () => {
+            const on = gmIsSaved(gameId(data.game) + "|" + prop + "|" + s.side);
+            save.classList.toggle("on", on);
+            save.textContent = on ? "SAVED ✓" : "SAVE";
+        };
+        save.onclick = () => {
+            const id = gameId(data.game) + "|" + prop + "|" + s.side;
+            if (gmIsSaved(id)) {
+                gmUnsave(id);
+                message.textContent = "Removed from Saved Game Picks.";
+            } else {
+                gmSavePick(record());
+                message.textContent = "Saved with today's line. Find it under Saved Game Picks below.";
+            }
+            paint();
+        };
+        paint();
+        const copy = mk("button", "mini-btn secondary-button", "COPY");
+        copy.type = "button";
+        copy.onclick = () => {
             const row = gmPickRow(data.game, data.week, prop, s.side, s.line, s.projection, market,
                                   market.ev_by_side[s.side], market.agreement ? market.agreement.label : "");
             gmCopy(tsv([row]), message);
         };
-        actions.append(button);
+        pick.append(save, copy);
+        actions.append(pick);
     }
     card.append(actions, message);
     return card;
@@ -4307,6 +4344,131 @@ function gmRender(data, lines) {
     box.append(stats);
 }
 
+/* ---------- saved game picks (kept on this device) ---------- */
+
+const GM_SAVED_KEY = "nfl_saved_games_v1";
+
+function gmReadSaved() {
+    try {
+        const list = JSON.parse(localStorage.getItem(GM_SAVED_KEY) || "[]");
+        return Array.isArray(list) ? list : [];
+    } catch (error) { return []; }
+}
+
+function gmWriteSaved(list) {
+    try { localStorage.setItem(GM_SAVED_KEY, JSON.stringify(list.slice(-300))); } catch (error) {}
+}
+
+function gmIsSaved(id) {
+    return gmReadSaved().some(p => p.id === id);
+}
+
+function gmSavePick(record) {
+    const list = gmReadSaved().filter(p => p.id !== record.id);
+    list.push(record);
+    gmWriteSaved(list);
+    gmRenderSaved();
+}
+
+function gmUnsave(id) {
+    gmWriteSaved(gmReadSaved().filter(p => p.id !== id));
+    gmRenderSaved();
+}
+
+/* Grade a saved pick from the final score already loaded with the schedule. */
+function gmSettle(p) {
+    const game = gameList.find(g => gameId(g) === p.gameId);
+    if (!game || game.status !== "final" || game.home_score == null || game.away_score == null) {
+        return {result: "PENDING", actual: ""};
+    }
+    const hs = Number(game.home_score), as = Number(game.away_score);
+    if (p.prop === "Total") {
+        const total = hs + as;
+        const result = total === p.line ? "PUSH" : (p.side === "OVER") === (total > p.line) ? "HIT" : "MISS";
+        return {result, actual: total};
+    }
+    const margin = p.side === game.home ? hs - as : as - hs;
+    const score = p.prop === "Spread" ? margin + p.line : margin;
+    return {result: score === 0 ? "PUSH" : score > 0 ? "HIT" : "MISS", actual: margin};
+}
+
+function gmSavedRow(p, actual) {
+    return [p.date, p.week, p.away + " @ " + p.home, p.prop, p.side, p.line == null ? "" : p.line,
+            p.projection == null ? "" : p.projection,
+            p.ev == null ? "" : (p.ev * 100).toFixed(1) + "%", p.grade, p.trend, "", "", actual];
+}
+
+function gmRenderSaved() {
+    const box = $("gmSavedList");
+    if (!box) return;
+    const list = gmReadSaved().sort((a, b) => b.savedAt - a.savedAt);
+    box.replaceChildren();
+
+    const tally = {};
+    let hit = 0, miss = 0, push = 0;
+    const settled = list.map(p => ({p, s: gmSettle(p)}));
+    for (const {p, s} of settled) {
+        if (s.result === "PENDING") continue;
+        if (s.result === "PUSH") { push++; continue; }
+        const t = tally[p.grade] = tally[p.grade] || {w: 0, l: 0};
+        if (s.result === "HIT") { hit++; t.w++; } else { miss++; t.l++; }
+    }
+    $("gmSavedSummary").textContent = !list.length
+        ? "Tap SAVE on a side above to keep it here. Finished games grade themselves."
+        : "Settled " + hit + "-" + miss + (push ? "-" + push : "") +
+          (hit + miss ? " (" + Math.round(hit / (hit + miss) * 100) + "%)" : "") +
+          Object.keys(tally).map(g => " | " + g + " " + tally[g].w + "-" + tally[g].l).join("") +
+          " | Pending " + settled.filter(x => x.s.result === "PENDING").length;
+    $("gmCopyAll").hidden = !list.length;
+    $("gmClearSettled").hidden = !settled.some(x => x.s.result !== "PENDING");
+
+    for (const {p, s} of settled) {
+        const item = mk("div", "metric gm-card");
+        const head = mk("div", "gm-top");
+        head.append(mk("span", "chip rate-" + (p.grade === "LEAN" ? "lean" : "pass"), p.grade));
+        head.append(mk("span", "chip " + (s.result === "HIT" ? "play" : s.result === "MISS" ? "pass" : ""), s.result));
+        head.append(mk("strong", null, p.prop + ": " + p.label));
+        item.append(head);
+        item.append(mk("p", "small",
+            p.away + " @ " + p.home + " | Week " + p.week + " | saved " + p.date +
+            (p.ev != null ? " | " + gmEvText(p.ev) : "") + (p.trend ? " | Trend " + p.trend : "")));
+        if (s.result !== "PENDING") {
+            item.append(mk("p", "small", "Final margin/total used: " + s.actual));
+        }
+        const row = mk("div");
+        const open = mk("button", "mini-btn secondary-button", "OPEN GAME");
+        open.type = "button";
+        open.onclick = () => {
+            const g = gameList.find(x => gameId(x) === p.gameId);
+            if (!g) return;
+            $("gmPicker").value = String(gameList.indexOf(g));
+            gmSelect(g);
+            window.scrollTo({top: 0, behavior: "smooth"});
+        };
+        const copy = mk("button", "mini-btn secondary-button", "COPY");
+        copy.type = "button";
+        copy.onclick = () => gmCopy(tsv([gmSavedRow(p, s.actual)]), $("gmSavedMsg"));
+        const remove = mk("button", "mini-btn secondary-button", "REMOVE");
+        remove.type = "button";
+        remove.onclick = () => gmUnsave(p.id);
+        row.append(open, copy, remove);
+        item.append(row);
+        box.append(item);
+    }
+}
+
+$("gmCopyAll").addEventListener("click", () => {
+    const rows = gmReadSaved().sort((a, b) => a.savedAt - b.savedAt).map(p => gmSavedRow(p, gmSettle(p).actual));
+    gmCopy(tsv(rows), $("gmSavedMsg"));
+});
+
+$("gmClearSettled").addEventListener("click", () => {
+    const keep = gmReadSaved().filter(p => gmSettle(p).result === "PENDING");
+    gmWriteSaved(keep);
+    gmRenderSaved();
+    $("gmSavedMsg").textContent = "Removed settled picks. Copy them to your sheet first if you want a record.";
+});
+
 /* ---------- fetching every game's lines at once ---------- */
 
 async function gmFetch() {
@@ -4420,6 +4582,7 @@ showPanel = function(panel) {
 };
 
 fillGamesPicker();
+gmRenderSaved();
 
 
 
