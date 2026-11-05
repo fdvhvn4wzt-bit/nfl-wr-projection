@@ -8,7 +8,7 @@ projection formula the dashboard already uses is kept. Additions:
   * /api/injury-status -> official injury designation for the selected player
   * other sportsbooks returned in /api/live-odds (DraftKings stays the primary key)
 """
-import json, math, os, re, time
+import hmac, json, math, os, re, time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
@@ -89,6 +89,32 @@ def rate_limit(request: Request, bucket: str, limit: int, window: int = 60):
         raise HTTPException(429, 'Too many requests. Please wait a moment and try again.')
     hits.append(now)
     RATE[key] = hits
+
+
+FAILED_CODES = {}
+
+
+def check_access(request: Request):
+    """Odds lookups spend paid API credits, so they need the owner's access code.
+
+    The code lives in the ODDS_ACCESS_CODE environment variable (Render > Environment).
+    If it is not set, lookups stay locked rather than open, so credits are safe by default.
+    """
+    expected = os.getenv('ODDS_ACCESS_CODE', '')
+    if not expected:
+        raise HTTPException(503, 'Live odds are locked. The owner needs to set ODDS_ACCESS_CODE on the server.')
+    fwd = request.headers.get('x-forwarded-for', '').split(',')[0].strip()
+    ip = fwd or (request.client.host if request.client else 'unknown')
+    now = time.time()
+    fails = [x for x in FAILED_CODES.get(ip, []) if now - x < 600]
+    if len(fails) >= 8:
+        FAILED_CODES[ip] = fails
+        raise HTTPException(429, 'Too many wrong codes. Try again in 10 minutes.')
+    supplied = request.headers.get('x-access-code', '')
+    if not hmac.compare_digest(supplied.encode('utf-8'), expected.encode('utf-8')):
+        fails.append(now)
+        FAILED_CODES[ip] = fails
+        raise HTTPException(401, 'Incorrect access code.')
 
 
 def avg(values):
@@ -433,7 +459,8 @@ def books():
 
 @app.get('/api/health')
 def health():
-    return {'status': 'ok', 'season': season(), 'live_odds_configured': bool(os.getenv('ODDS_API_KEY'))}
+    return {'status': 'ok', 'season': season(), 'live_odds_configured': bool(os.getenv('ODDS_API_KEY')),
+            'odds_lock_set': bool(os.getenv('ODDS_ACCESS_CODE'))}
 
 
 @app.get('/api/matchups')
@@ -943,6 +970,7 @@ def parse_event_odds(data, player_name):
 
 @app.get('/api/live-odds')
 def live_odds(request: Request, offense_team: str, defense: str, player: str):
+    check_access(request)
     rate_limit(request, 'odds', 40)
     offense_team, defense = validate(offense_team, defense)
     now = datetime.now(timezone.utc)
