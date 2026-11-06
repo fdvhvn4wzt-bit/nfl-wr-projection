@@ -4590,6 +4590,38 @@ gmRenderSaved();
 
 
 /* ==========================================
+   TD DEFENSE RANK: explanation + info icon
+   ========================================== */
+
+INFO_TEXT.tdrank = {
+    title: "🏈 Defensive TD Rank (1-32)",
+    content: `
+<p>This ranks all 32 defenses by how many touchdowns they have <strong>allowed per game</strong> this season to the player's position.</p>
+<p>🟢 <strong>#1</strong> = allows the <strong>most</strong> TDs to that position. Best matchup for an OVER or a touchdown bet.</p>
+<p>🔴 <strong>#32</strong> = allows the <strong>fewest</strong>. Toughest matchup, which favors an UNDER.</p>
+<p>Roughly: #1-8 is favorable, #9-24 is middle of the pack, and #25-32 is tough.</p>
+<p><strong>What counts:</strong> receiving TDs for WR and TE, rushing or receiving TDs for RB, and passing or rushing TDs for QB. Each defense's number is total TDs divided by its games played. Games where the position scored none count as zero. Defenses with the same per-game number share a rank.</p>
+<p><strong>Example:</strong><br>Defense A allowed 12 receiving TDs to WRs in 8 games = 1.50 per game, which ranks #3. Defense B allowed 4 in 8 = 0.50 per game, which ranks #29.</p>
+<p><strong>Limits:</strong> The rank uses the full season, so "Last 5" is shown for context only. TDs are rare and random, so early in the season one big game can swing a rank a lot. The rank also does not adjust for how often opponents throw or run, or for how good those offenses are.</p>
+<p><strong>Important:</strong> It describes the past and does not guarantee future results. Use it as context, not as a pick.</p>`
+};
+
+const appendTouchdownMetricsBeforeRank = appendTouchdownMetrics;
+appendTouchdownMetrics = function(containerId, items) {
+    appendTouchdownMetricsBeforeRank(containerId, items);
+    const container = $(containerId);
+    if (!container) return;
+    container.querySelectorAll(".td-added-metric").forEach(box => {
+        const label = box.querySelector(".label");
+        if (label && !label.querySelector(".info-icon") && /NFL Rank$/.test(label.textContent)) {
+            label.append(infoIcon("tdrank"));
+        }
+    });
+};
+
+
+
+/* ==========================================
    ODDS ACCESS CODE
    Live DraftKings lookups spend paid Odds API credits, so the server
    requires an access code. The app asks for it the first time and
