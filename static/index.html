@@ -426,14 +426,6 @@ summary{cursor:pointer;margin:8px 0}
 <button id="gmClear" type="button" class="secondary-button">CLEAR LINES</button>
 </div>
 <div id="gmResult"></div>
-<div class="card" id="gmSavedCard">
-<h2>📌 Saved Game Picks</h2>
-<p class="small" id="gmSavedSummary"></p>
-<div id="gmSavedList"></div>
-<button id="gmCopyAll" type="button" hidden>COPY ALL FOR SHEET</button>
-<button id="gmClearSettled" type="button" class="secondary-button" hidden>REMOVE SETTLED PICKS</button>
-<p class="small" id="gmSavedMsg" aria-live="polite"></p>
-</div>
 <textarea id="gmFallback" readonly hidden rows="3"></textarea>
 </section>
 <section id="historyPanel" hidden>
@@ -454,6 +446,15 @@ summary{cursor:pointer;margin:8px 0}
 <p class="small" id="builderMsg" aria-live="polite"></p>
 <textarea id="builderFallback" readonly hidden rows="5"></textarea>
 </div>
+</div>
+<div class="card" id="gmSavedCard">
+<h2>🏟️ Saved Game Picks</h2>
+<p class="small" id="gmSavedSummary"></p>
+<p class="small">Saved from the Games tab. Finished games grade themselves. These stay until you remove them (they do not clear on Tuesday).</p>
+<div id="gmSavedList"></div>
+<button id="gmCopyAll" type="button" hidden>COPY ALL FOR SHEET</button>
+<button id="gmClearSettled" type="button" class="secondary-button" hidden>REMOVE SETTLED PICKS</button>
+<p class="small" id="gmSavedMsg" aria-live="polite"></p>
 </div>
 <div class="card">
 <h2>🎯 My Saved Edges</h2>
@@ -4200,7 +4201,7 @@ function gmMarketCard(title, subtitle, market, sides, data, prop) {
                 message.textContent = "Removed from Saved Game Picks.";
             } else {
                 gmSavePick(record());
-                message.textContent = "Saved with today's line. Find it under Saved Game Picks below.";
+                message.textContent = "Saved to the History tab with today's line.";
             }
             paint();
         };
@@ -4414,7 +4415,7 @@ function gmRenderSaved() {
         if (s.result === "HIT") { hit++; t.w++; } else { miss++; t.l++; }
     }
     $("gmSavedSummary").textContent = !list.length
-        ? "Tap SAVE on a side above to keep it here. Finished games grade themselves."
+        ? "Nothing saved yet. Tap SAVE on a side in the Games tab and it will appear here."
         : "Settled " + hit + "-" + miss + (push ? "-" + push : "") +
           (hit + miss ? " (" + Math.round(hit / (hit + miss) * 100) + "%)" : "") +
           Object.keys(tally).map(g => " | " + g + " " + tally[g].w + "-" + tally[g].l).join("") +
@@ -4441,6 +4442,7 @@ function gmRenderSaved() {
         open.onclick = () => {
             const g = gameList.find(x => gameId(x) === p.gameId);
             if (!g) return;
+            showPanel("games");
             $("gmPicker").value = String(gameList.indexOf(g));
             gmSelect(g);
             window.scrollTo({top: 0, behavior: "smooth"});
@@ -4575,6 +4577,7 @@ showPanel = function(panel) {
     const on = panel === "games";
     $("gamesPanel").hidden = !on;
     $("gamesTab").classList.toggle("active", on);
+    if (panel === "history") gmRenderSaved();
     if (on) {
         $("matchupSelector").hidden = true;
         gmEnter();
