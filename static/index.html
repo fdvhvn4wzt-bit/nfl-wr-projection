@@ -3752,7 +3752,7 @@ function tsv(rows) {
 function propsRows() {
     const date = sheetDate();
     return builderLegs.map(leg => [
-        date, leg.week, leg.player, leg.prop, leg.side, leg.line,
+        date, leg.week, leg.player, leg.prop, leg.side, leg.line, "",
         leg.projection, leg.ev === "" ? "" : (leg.ev * 100).toFixed(1) + "%", leg.grade, leg.trend
     ]);
 }
@@ -4129,7 +4129,7 @@ async function gmCopy(text, messageBox) {
 
 function gmPickRow(game, week, prop, side, line, projection, market, sideEv, trend) {
     return [
-        sheetDate(), week, game.away + " @ " + game.home, prop, side, line === null ? "" : line,
+        sheetDate(), week, game.away + " @ " + game.home, prop, side, line === null ? "" : line, "",
         projection === null ? "" : projection,
         sideEv === null || sideEv === undefined ? "" : (sideEv * 100).toFixed(1) + "%",
         side === market.side ? market.rating : "PASS", trend
@@ -4394,7 +4394,7 @@ function gmSettle(p) {
 }
 
 function gmSavedRow(p, actual) {
-    return [p.date, p.week, p.away + " @ " + p.home, p.prop, p.side, p.line == null ? "" : p.line,
+    return [p.date, p.week, p.away + " @ " + p.home, p.prop, p.side, p.line == null ? "" : p.line, "",
             p.projection == null ? "" : p.projection,
             p.ev == null ? "" : (p.ev * 100).toFixed(1) + "%", p.grade, p.trend, "", "", actual];
 }
