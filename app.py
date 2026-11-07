@@ -9,6 +9,7 @@ projection formula the dashboard already uses is kept. Additions:
   * other sportsbooks returned in /api/live-odds (DraftKings stays the primary key)
 """
 import hmac, json, math, os, re, time
+from statistics import NormalDist
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
@@ -1341,6 +1342,19 @@ def find_game(home, away, week):
     return (upcoming if not upcoming.empty else g).sort_values('_kickoff').iloc[0]
 
 
+def ml_win_prob(home_ml, away_ml, model_margin):
+    """Moneyline win chance for the home team.
+    Start from the market's own no-vig probability, turn it into the margin it implies, blend that margin
+    with the model's (market-heavy), and convert back with the same curve. With zero disagreement the
+    answer is exactly the market's probability, so a favorite or underdog never looks like value just
+    because the margin-to-win-chance curve is a little off."""
+    ih, ia = implied_prob(home_ml), implied_prob(away_ml)
+    market_home = ih / (ih + ia)
+    market_margin = GAME_SD_MARGIN * NormalDist().inv_cdf(min(max(market_home, .001), .999))
+    mu = GAME_MARKET_WEIGHT * market_margin + (1 - GAME_MARKET_WEIGHT) * model_margin
+    return _ncdf(mu / GAME_SD_MARGIN), market_home
+
+
 @app.get('/api/game-analysis')
 def game_analysis(home: str, away: str, week: int | None = None,
                   spread: float | None = None, total: float | None = None,
@@ -1457,20 +1471,14 @@ def game_analysis(home: str, away: str, week: int | None = None,
             out['total']['result'] = 'PUSH' if t == total else 'OVER' if t > total else 'UNDER'
 
     if home_ml is not None and away_ml is not None:
-        mu = w * (-spread if spread is not None else proj['margin']) + (1 - w) * proj['margin']
-        if spread is None:
-            mu = proj['margin']
-        p_home = 1 - _ncdf((0 - mu) / GAME_SD_MARGIN)
+        p_home, market_home = ml_win_prob(home_ml, away_ml, proj['margin'])
         p_away = 1 - p_home
         g = grade_side((home_ml, away_ml), (p_home, p_away, 0.0), (home, away))
         if small:
             g['rating'] = 'PASS'
-        ih, ia = implied_prob(home_ml), implied_prob(away_ml)
         out['moneyline'] = {'home_price': home_ml, 'away_price': away_ml, 'home_win': round(p_home, 4),
-                            'away_win': round(p_away, 4), 'market_home': round(ih / (ih + ia), 4),
-                            'market_away': round(ia / (ih + ia), 4), **g}
-        if spread is None:
-            out['notes'].append('No spread entered, so the moneyline uses the model margin only.')
+                            'away_win': round(p_away, 4), 'market_home': round(market_home, 4),
+                            'market_away': round(1 - market_home, 4), **g}
         if final:
             out['moneyline']['result'] = home if final['home_score'] > final['away_score'] else away if final['away_score'] > final['home_score'] else 'TIE'
     return out
