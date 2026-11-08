@@ -6,7 +6,7 @@ projection formula the dashboard already uses is kept. Additions:
   * speed (cached defensive tables, no per-player recomputation, gzip)
   * /api/analyze-line  -> probability of OVER/UNDER, de-vigged market odds, EV
   * /api/injury-status -> official injury designation for the selected player
-  * other sportsbooks returned in /api/live-odds (DraftKings stays the primary key)
+  * /api/live-odds returns DraftKings only by default (set ODDS_BOOKMAKERS to add other books)
 """
 import hmac, json, math, os, re, time
 from statistics import NormalDist
@@ -915,8 +915,13 @@ def project_qb(offense_team: str, quarterback: str, defense: str,
 
 
 # ----------------------------------------------------------------------------
-# Live odds (DraftKings stays primary; other books are included for line shopping)
+# Live odds (DraftKings only by default; see ODDS_BOOKMAKERS)
 # ----------------------------------------------------------------------------
+# DraftKings only. A bookmakers filter counts like one region, so credit cost is the same as before, but other
+# sportsbooks are no longer fetched or shown. Set ODDS_BOOKMAKERS (comma separated keys) to add more.
+ODDS_BOOKMAKERS = os.getenv('ODDS_BOOKMAKERS', 'draftkings')
+
+
 def odds_request(path, params):
     key = os.getenv('ODDS_API_KEY')
     if not key:
@@ -941,7 +946,10 @@ def implied_prob(price):
 def parse_event_odds(data, player_name):
     pn = norm_name(player_name)
     result = {}
+    allowed = {b.strip().lower() for b in ODDS_BOOKMAKERS.split(',') if b.strip()}
     for book in data.get('bookmakers', []):
+        if str(book.get('key', '')).lower() not in allowed:
+            continue
         title = 'DraftKings' if book.get('key', '').lower() == 'draftkings' else (book.get('title') or book.get('key'))
         for market in book.get('markets', []):
             prop = PROP_BY_MARKET.get(market.get('key'))
@@ -994,7 +1002,7 @@ def live_odds(request: Request, offense_team: str, defense: str, player: str):
         else:
             try:
                 data = odds_request(f"sports/americanfootball_nfl/events/{event['id']}/odds",
-                                    {'regions': 'us', 'markets': ','.join(MARKETS.values()), 'oddsFormat': 'american'})
+                                    {'bookmakers': ODDS_BOOKMAKERS, 'markets': ','.join(MARKETS.values()), 'oddsFormat': 'american'})
                 fetched = now
                 cache[event_key] = (now + timedelta(minutes=ODDS_CACHE_MINUTES), data, now)
             except HTTPException:
