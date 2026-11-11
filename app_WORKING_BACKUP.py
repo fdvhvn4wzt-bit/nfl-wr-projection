@@ -1730,9 +1730,26 @@ def weekly_candidates():
                 if quality == 'LOW':
                     continue
                 direction = 'OVER' if relative > 0 else 'UNDER'
-                score = round(min(30, abs(relative) * 100) + (5 if quality == 'HIGH' else 2), 1)
                 if abs(relative) < .08 or abs(projected - baseline) < .5:
                     continue
+                # Combined score: a moderate-to-large gap from the season average, the recent trend and the
+                # matchup agreeing, a stable role and enough games. Very large gaps are tapered down because they
+                # are more often a role change or small sample than a real edge.
+                gap_pct = abs(relative) * 100
+                gap_part = gap_pct if gap_pct <= 25 else 25 if gap_pct <= 35 else max(8.0, 25 - (gap_pct - 35) * .8)
+                last3 = t['last_3']
+                if direction == 'OVER':
+                    trend_vote = 1 if last3 > baseline * 1.08 else -1 if last3 < baseline * .92 else 0
+                    defense_vote = 1 if defense_factor > 1.025 else -1 if defense_factor < .975 else 0
+                else:
+                    trend_vote = 1 if last3 < baseline * .92 else -1 if last3 > baseline * 1.08 else 0
+                    defense_vote = 1 if defense_factor < .975 else -1 if defense_factor > 1.025 else 0
+                season_usage = sum(usage) / len(usage) if usage else 0
+                recent_usage = sum(usage[-3:]) / min(3, len(usage)) if usage else 0
+                usage_ratio = recent_usage / season_usage if season_usage > 0 else 1.0
+                role_flag = usage_ratio < .7 or usage_ratio > 1.35
+                score = round(gap_part + (5 if quality == 'HIGH' else 2) + 4 * trend_vote + 4 * defense_vote
+                              - (3 if role_flag else 0) - (2 if len(rows) < 8 else 0), 1)
                 reasons = []
                 if direction == 'OVER':
                     if t['last_3'] > baseline * 1.08:
@@ -1744,6 +1761,8 @@ def weekly_candidates():
                         reasons.append('Recent production below season average')
                     if defense_factor < .975:
                         reasons.append('Opponent allows below-average production to this position')
+                if role_flag:
+                    reasons.append('Usage has changed recently - check the player\'s role')
                 if status == 'QUESTIONABLE':
                     reasons.append('Listed QUESTIONABLE - verify status')
                 if not reasons:
@@ -1751,7 +1770,8 @@ def weekly_candidates():
                 candidates.append({'player': display, 'position': pos, 'team': team, 'opponent': opponent,
                                    'prop': prop, 'projection': round(projected, 2), 'season_average': round(baseline, 2),
                                    'score': score, 'confidence': quality, 'reasons': reasons, 'direction': direction,
-                                   'injury_status': status})
+                                   'injury_status': status, 'defense_games': int(defense_games or 0),
+                                   'signals': {'trend': trend_vote, 'defense': defense_vote, 'role_change': bool(role_flag)}})
     selected, counts = [], {}
     for direction in ('OVER', 'UNDER'):
         ranked = sorted((x for x in candidates if x['direction'] == direction), key=lambda x: x['score'], reverse=True)
@@ -1765,6 +1785,7 @@ def weekly_candidates():
             picked += 1
             if picked == 10:
                 break
+    selected.sort(key=lambda x: x['score'], reverse=True)
     return selected, len(games) // 2, (slate_week, next_kickoff, inj_week_ok)
 
 
@@ -1795,6 +1816,74 @@ def weekly_top20():
                               'Official injury report for this week is not published yet - injuries NOT verified.'))}
         WEEKLY_CACHE['result'] = {'expires': expires, 'data': result}
         return result
+
+
+TOP_LINES_CACHE_MINUTES = int(os.getenv('TOP_LINES_CACHE_MINUTES', '60'))
+RATING_RANK = {'PLAY': 0, 'LEAN': 1, 'PASS': 2}
+
+
+@app.get('/api/top-picks-lines')
+def top_picks_lines(request: Request, limit: int = 8):
+    """Fetch DraftKings lines for only the top few Top Picks, and only the markets those picks need,
+    then run the normal line analysis. Costs (markets needed) x (games involved) credits, nothing for cached games."""
+    check_access(request)
+    rate_limit(request, 'toplines', 6)
+    limit = max(1, min(int(limit), 10))
+    items = [dict(x) for x in sorted(weekly_top20()['items'], key=lambda x: x['score'], reverse=True)[:limit]]
+    if not items:
+        return {'items': [], 'credits_used': 0, 'games': 0, 'note': 'No Top Picks available.'}
+    now = datetime.now(timezone.utc)
+    cached_events = cache.get('events')
+    if cached_events and now < cached_events[0]:
+        events = cached_events[1]
+    else:
+        events = odds_request('sports/americanfootball_nfl/events', {})
+        cache['events'] = (now + timedelta(minutes=3), events)
+    needs = {}
+    for it in items:
+        names = {NFL_TEAMS.get(it['team']), NFL_TEAMS.get(it['opponent'])}
+        ev = next((e for e in events if {e.get('home_team'), e.get('away_team')} == names), None)
+        it['_event'] = ev['id'] if ev else None
+        if ev:
+            needs.setdefault(ev['id'], set()).add(MARKETS[it['prop']])
+    credits, event_data = 0, {}
+    for event_id, markets in needs.items():
+        full = cache.get('event_odds:' + str(event_id))
+        key = 'toplines:' + str(event_id) + ':' + ','.join(sorted(markets))
+        saved = cache.get(key)
+        with odds_lock:
+            if full and now < full[0]:
+                event_data[event_id] = full[1]
+            elif saved and now < saved[0]:
+                event_data[event_id] = saved[1]
+            else:
+                data = odds_request(f'sports/americanfootball_nfl/events/{event_id}/odds',
+                                    {'bookmakers': ODDS_BOOKMAKERS, 'markets': ','.join(sorted(markets)), 'oddsFormat': 'american'})
+                cache[key] = (now + timedelta(minutes=TOP_LINES_CACHE_MINUTES), data)
+                event_data[event_id] = data
+                credits += len(markets)
+    out = []
+    for it in items:
+        row = {k: v for k, v in it.items() if k != '_event'}
+        row['line_available'] = False
+        data = event_data.get(it['_event'])
+        book = (parse_event_odds(data, it['player']).get('DraftKings') or {}).get(it['prop']) if data else None
+        if book and book.get('line') is not None:
+            try:
+                a = analyze_line(request, it['team'], it['player'], it['prop'], float(book['line']), float(it['projection']),
+                                 book.get('over_price'), book.get('under_price'), int(it.get('defense_games') or 0))
+                row.update({'line_available': True, 'line': book['line'], 'over_price': book.get('over_price'),
+                            'under_price': book.get('under_price'), 'analysis': {k: a[k] for k in (
+                                'side', 'ev', 'rating', 'edge_pts', 'side_prob', 'side_fair', 'side_price', 'confidence', 'warnings')},
+                            'agrees': a['side'] == it['direction']})
+            except HTTPException:
+                pass
+        out.append(row)
+    out.sort(key=lambda r: (not r['line_available'],
+                            RATING_RANK.get(r['analysis']['rating'], 3) if r['line_available'] else 9,
+                            -(r['analysis']['ev']) if r['line_available'] else 0))
+    return {'items': out, 'credits_used': credits, 'games': len(needs), 'checked': len(items),
+            'note': 'DraftKings lines for the top Top Picks only. Cached for ' + str(TOP_LINES_CACHE_MINUTES) + ' minutes.'}
 
 
 # ----------------------------------------------------------------------------
