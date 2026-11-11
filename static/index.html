@@ -4633,6 +4633,87 @@ appendTouchdownMetrics = function(containerId, items) {
 };
 
 
+/* ==========================================
+   TOP PICKS: combined score explanation + "check lines" for the shortlist
+   ========================================== */
+
+INFO_TEXT.opportunity = {
+    title: "🏆 Opportunity Score Explained",
+    content: `
+<p>The score ranks which players are worth a closer look. It is not a win probability, and OVER / UNDER here mean above or below the player's <strong>season average</strong>, not a sportsbook line.</p>
+<p><strong>What adds points</strong></p>
+<p>• <strong>Size of the gap</strong> between the projection and the season average, up to 25 points. Gaps over about 35% are tapered down, because they are often a role change or a small sample, not an edge.<br>
+• <strong>Data confidence:</strong> HIGH +5, MEDIUM +2.<br>
+• <strong>Recent trend agrees</strong> with the direction: +4 (disagrees: -4).<br>
+• <strong>Opponent defense agrees</strong> with the direction: +4 (disagrees: -4).</p>
+<p><strong>What takes points away</strong></p>
+<p>• Usage changed a lot in the last 3 games (a role change or injury may be driving it): -3.<br>
+• Fewer than 8 games of data: -2.</p>
+<p>After ranking, use <strong>Check lines</strong> to see DraftKings lines for just the top few and get the real EV before deciding.</p>
+<p><strong>Important:</strong> A high score means the player looks different from usual in a way the data supports. It does not mean the sportsbook line is wrong.</p>`
+};
+
+(function () {
+    const intro = document.querySelector("#weeklyPanel .card > p.small");
+    if (intro) intro.textContent = "Players whose projection differs most from their season average, with recent form and the opponent's defense agreeing. These are not sportsbook-line picks until you check lines.";
+
+    const root = document.getElementById("weeklyCards");
+    if (!root || document.getElementById("tpLinesBox")) return;
+    const box = document.createElement("div");
+    box.id = "tpLinesBox";
+    box.className = "metric";
+    box.style.margin = "12px 0";
+    box.innerHTML = `<h3>Check lines for the top picks</h3>
+<p class="small">Fetches DraftKings lines for only the top 8 picks (and only the markets they need), then shows the EV and grade for each. Uses Odds API credits for games not fetched in the last hour. Needs your access code.</p>
+<button id="tpLinesBtn" type="button">CHECK LINES FOR THE TOP 8</button>
+<p class="small" id="tpLinesStatus"></p>
+<div id="tpLinesOut"></div>`;
+    root.before(box);
+
+    const money = v => v == null ? "-" : (v > 0 ? "+" : "") + v;
+    const label = key => String(key || "").replaceAll("_", " ").toUpperCase();
+
+    document.getElementById("tpLinesBtn").onclick = async function () {
+        const btn = this, status = document.getElementById("tpLinesStatus"), out = document.getElementById("tpLinesOut");
+        if (!window.confirm("This fetches DraftKings lines for the top 8 Top Picks and uses a few Odds API credits. Continue?")) return;
+        btn.disabled = true;
+        status.textContent = "Fetching DraftKings lines...";
+        out.replaceChildren();
+        try {
+            const data = await jsonFetch("/api/top-picks-lines?limit=8");
+            status.textContent = "Checked " + data.checked + " picks in " + data.games + " games | Credits used this time: " + data.credits_used + " | " + (data.note || "");
+            (data.items || []).forEach((p, i) => {
+                const card = document.createElement("div");
+                card.className = "metric";
+                card.style.margin = "10px 0";
+                const h = document.createElement("h3");
+                h.textContent = "#" + (i + 1) + " " + p.player + " (" + p.position + ") - " + p.team + " vs " + p.opponent;
+                const body = document.createElement("p");
+                body.style.whiteSpace = "pre-line";
+                if (!p.line_available) {
+                    body.textContent = label(p.prop) + " | No DraftKings line posted yet.\nTop pick score: " + p.score + " (" + p.direction + " vs season average)";
+                } else {
+                    const a = p.analysis;
+                    body.textContent = label(p.prop) + " | DraftKings line " + p.line + " (over " + money(p.over_price) + " / under " + money(p.under_price) + ")\n" +
+                        "Projection " + p.projection + " | Best side: " + a.side + " | EV " + (a.ev * 100).toFixed(1) + "% | Grade " + a.rating +
+                        " | " + (p.agrees ? "Agrees with the Top Pick direction" : "Opposite of the Top Pick direction") + "\n" +
+                        "Top pick score: " + p.score + (a.warnings && a.warnings.length ? "\nWarning: " + a.warnings.join(" ") : "");
+                }
+                const view = document.createElement("button");
+                view.textContent = "VIEW PLAYER";
+                view.onclick = () => viewWeeklyPlayer(p);
+                card.append(h, body, view);
+                out.append(card);
+            });
+        } catch (error) {
+            status.textContent = "Could not check lines: " + error.message;
+        } finally {
+            btn.disabled = false;
+        }
+    };
+})();
+
+
 
 /* ==========================================
    ODDS ACCESS CODE
@@ -4752,7 +4833,7 @@ function askAccessCode(message) {
 const jsonFetchBeforeLock = jsonFetch;
 
 jsonFetch = async function(url) {
-    if (!["/api/live-odds", "/api/game-lines"].some(path => String(url).startsWith(path))) return jsonFetchBeforeLock(url);
+    if (!["/api/live-odds", "/api/game-lines", "/api/top-picks-lines"].some(path => String(url).startsWith(path))) return jsonFetchBeforeLock(url);
 
     let message = "";
     for (let attempt = 0; attempt < 3; attempt++) {
