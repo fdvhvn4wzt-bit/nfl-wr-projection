@@ -2769,6 +2769,19 @@ function trendDefenseSignal(kind, propKey, data) {
         }
     }
 
+    // WR/TE receiving yards and receptions, and RB rushing yards: use the yards the defense
+    // allows to that position vs the league average (only with 4+ games and a 3%+ difference).
+    if ((kind === "receiving" && (propKey === "receiving_yards" || propKey === "receptions")) ||
+        (kind === "rushing" && propKey === "rushing_yards")) {
+        const a = Number(data.position_defense_yards_allowed);
+        const l = Number(data.league_position_yards_allowed);
+        const g = Number(data.position_defense_games);
+        if (!Number.isFinite(a) || !Number.isFinite(l) || l <= 0 || !(g >= 4)) return null;
+        if (a > l * 1.03) return "OVER";
+        if (a < l * 0.97) return "UNDER";
+        return null;
+    }
+
     // Other props do not currently provide a directly
     // comparable NFL positional baseline in this frontend.
     if (allowed == null || league == null ||
