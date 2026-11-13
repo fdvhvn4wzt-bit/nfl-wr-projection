@@ -4714,6 +4714,128 @@ INFO_TEXT.opportunity = {
 })();
 
 
+/* ==========================================
+   WEATHER REMINDER FLAG
+   Not a forecast: it only says whether the home stadium is outdoors, so you know when to check the weather.
+   ========================================== */
+
+const STADIUM_ROOF = {
+    DET: "dome", MIN: "dome", NO: "dome", LV: "dome", LAR: "dome", LAC: "dome",
+    ATL: "retractable", DAL: "retractable", HOU: "retractable", IND: "retractable", ARI: "retractable"
+};
+
+let weatherData = {};
+async function loadWeather() {
+    try {
+        const r = await fetch("/api/weather-week");
+        if (!r.ok) return;
+        const data = await r.json();
+        weatherData = {};
+        (data.games || []).forEach(g => { weatherData[g.home + "|" + g.away] = g; });
+        addWeatherFlags(document.getElementById("weeklyCards"));
+        addWeatherFlags(document.getElementById("tpLinesOut"));
+    } catch (error) { /* the generic reminder is still shown */ }
+}
+
+function forecastText(w, home) {
+    const f = w.forecast;
+    const parts = [];
+    if (f.wind_mph != null) parts.push("wind " + f.wind_mph + " mph" + (f.gust_mph != null ? " (gusts " + f.gust_mph + ")" : ""));
+    if (f.precip_pct != null) parts.push(f.precip_pct + "% chance of precipitation");
+    if (f.temp_f != null) parts.push(f.temp_f + "\u00B0F");
+    const windy = (f.wind_mph != null && f.wind_mph >= 15) || (f.gust_mph != null && f.gust_mph >= 25);
+    const wet = f.precip_pct != null && f.precip_pct >= 50;
+    const cold = f.temp_f != null && f.temp_f <= 32 && f.precip_pct != null && f.precip_pct >= 30;
+    const notes = [];
+    if (windy) notes.push("Windy: passing props and totals may run low.");
+    if (wet) notes.push("Wet: ball security and passing may suffer.");
+    if (cold) notes.push("Freezing with precipitation: possible snow or ice.");
+    return {
+        level: windy || wet || cold ? "check" : "info",
+        text: "Kickoff forecast (" + home + "): " + parts.join(", ") + ". " +
+            (notes.length ? notes.join(" ") : "No major weather concern.") +
+            (w.roof === "retractable" ? " Retractable roof: check if it will be open." : "") +
+            " Forecasts change, so check again on game day."
+    };
+}
+
+function weatherFlagFor(teamA, teamB) {
+    const games = (typeof gameList !== "undefined" && Array.isArray(gameList)) ? gameList : [];
+    const game = games.find(g => g.status === "upcoming" &&
+        ((g.home === teamA && g.away === teamB) || (g.home === teamB && g.away === teamA)));
+    if (!game) return null;
+    const roof = STADIUM_ROOF[game.home] || "outdoor";
+    if (roof === "dome") return { level: "dome", text: "Roof: indoor stadium (" + game.home + "), weather should not matter." };
+    const w = weatherData[game.home + "|" + game.away];
+    if (w && w.forecast) return forecastText(w, game.home);
+    if (roof === "retractable") return { level: "check", text: "Roof: retractable (" + game.home + "). Check if it will be open, then the weather." };
+    return { level: "check", text: "Weather: outdoor stadium (" + game.home + "). Check wind, rain or snow before betting, especially passing props and totals. Wind of about 15 mph or more matters most." };
+}
+
+function weatherNode(flag) {
+    const p = document.createElement("p");
+    p.className = "small weather-flag";
+    p.style.margin = "6px 0 0";
+    p.style.color = flag.level === "check" ? "#fde68a" : "";
+    p.textContent = (flag.level === "check" ? "⚠️ " : "") + flag.text;
+    return p;
+}
+
+function addWeatherFlags(root) {
+    if (!root) return;
+    root.querySelectorAll(".metric").forEach(card => {
+        if (card.querySelector(".weather-flag")) return;
+        const h = card.querySelector("h3");
+        const m = h && /-\s*([A-Z]{2,3})\s+vs\s+([A-Z]{2,3})\s*$/.exec(h.textContent);
+        if (!m) return;
+        const flag = weatherFlagFor(m[1], m[2]);
+        if (flag) h.after(weatherNode(flag));
+    });
+}
+
+loadWeather();
+setInterval(loadWeather, 30 * 60 * 1000);
+
+(function () {
+    ["weeklyCards", "tpLinesOut"].forEach(id => {
+        const root = document.getElementById(id);
+        if (!root) return;
+        new MutationObserver(() => addWeatherFlags(root)).observe(root, { childList: true });
+    });
+
+    const picker = document.getElementById("gamePicker");
+    const sel = document.getElementById("matchupSelector");
+    function updateMain() {
+        if (!sel) return;
+        sel.querySelectorAll(".weather-flag").forEach(n => n.remove());
+        const o = document.getElementById("offense"), d = document.getElementById("defense");
+        if (!o || !d || !o.value || !d.value) return;
+        const flag = weatherFlagFor(o.value, d.value);
+        if (flag) sel.append(weatherNode(flag));
+    }
+    ["offense", "defense", "gamePicker"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("change", () => setTimeout(updateMain, 50));
+    });
+    setInterval(updateMain, 2500);
+})();
+
+(function () {
+    const note = document.getElementById("gmNote");
+    if (!note) return;
+    function refresh() {
+        if (typeof gmGame === "undefined" || !gmGame || gmGame.status !== "upcoming") return;
+        let p = document.getElementById("gmWeather");
+        if (!p) { p = document.createElement("p"); p.id = "gmWeather"; p.className = "small"; note.after(p); }
+        const flag = weatherFlagFor(gmGame.home, gmGame.away);
+        p.textContent = flag ? (flag.level === "check" ? "⚠️ " : "") + flag.text : "";
+        p.style.color = flag && flag.level === "check" ? "#fde68a" : "";
+    }
+    new MutationObserver(refresh).observe(note, { childList: true, characterData: true, subtree: true });
+    refresh();
+})();
+
+
 
 /* ==========================================
    ODDS ACCESS CODE
