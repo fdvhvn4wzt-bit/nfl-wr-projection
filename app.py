@@ -1818,6 +1818,86 @@ def weekly_top20():
         return result
 
 
+# ----------------------------------------------------------------------------
+# Game-day weather (Open-Meteo: free, no key, no Odds API credits)
+# ----------------------------------------------------------------------------
+STADIUMS = {  # team: (latitude, longitude, roof)  roof: outdoor / retractable / dome
+    'ARI': (33.5276, -112.2626, 'retractable'), 'ATL': (33.7553, -84.4006, 'retractable'),
+    'BAL': (39.2780, -76.6227, 'outdoor'), 'BUF': (42.7738, -78.7870, 'outdoor'),
+    'CAR': (35.2258, -80.8528, 'outdoor'), 'CHI': (41.8623, -87.6167, 'outdoor'),
+    'CIN': (39.0955, -84.5161, 'outdoor'), 'CLE': (41.5061, -81.6995, 'outdoor'),
+    'DAL': (32.7473, -97.0945, 'retractable'), 'DEN': (39.7439, -105.0201, 'outdoor'),
+    'DET': (42.3400, -83.0456, 'dome'), 'GB': (44.5013, -88.0622, 'outdoor'),
+    'HOU': (29.6847, -95.4107, 'retractable'), 'IND': (39.7601, -86.1639, 'retractable'),
+    'JAX': (30.3239, -81.6373, 'outdoor'), 'KC': (39.0489, -94.4839, 'outdoor'),
+    'LAC': (33.9535, -118.3392, 'dome'), 'LAR': (33.9535, -118.3392, 'dome'),
+    'LV': (36.0909, -115.1833, 'dome'), 'MIA': (25.9580, -80.2389, 'outdoor'),
+    'MIN': (44.9735, -93.2575, 'dome'), 'NE': (42.0909, -71.2643, 'outdoor'),
+    'NO': (29.9511, -90.0812, 'dome'), 'NYG': (40.8135, -74.0745, 'outdoor'),
+    'NYJ': (40.8135, -74.0745, 'outdoor'), 'PHI': (39.9008, -75.1675, 'outdoor'),
+    'PIT': (40.4468, -80.0158, 'outdoor'), 'SEA': (47.5952, -122.3316, 'outdoor'),
+    'SF': (37.4030, -121.9700, 'outdoor'), 'TB': (27.9759, -82.5033, 'outdoor'),
+    'TEN': (36.1665, -86.7713, 'outdoor'), 'WAS': (38.9076, -76.8645, 'outdoor'),
+}
+WEATHER_CACHE_MINUTES = int(os.getenv('WEATHER_CACHE_MINUTES', '60'))
+
+
+def fetch_forecast(lat, lon):
+    url = 'https://api.open-meteo.com/v1/forecast?' + urlencode({
+        'latitude': lat, 'longitude': lon, 'timezone': 'UTC', 'forecast_days': 16,
+        'wind_speed_unit': 'mph', 'temperature_unit': 'fahrenheit',
+        'hourly': 'temperature_2m,precipitation_probability,wind_speed_10m,wind_gusts_10m'})
+    with urlopen(UrlRequest(url, headers={'User-Agent': 'NFL-Prop-Dashboard/1.0'}), timeout=12) as response:
+        return json.loads(response.read())
+
+
+def forecast_at(data, kickoff):
+    """Average the three hours starting at kickoff (a game is about three hours long)."""
+    hours = data['hourly']['time']
+    start = kickoff.replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:%M')
+    if start not in hours:
+        return None
+    i = hours.index(start)
+    idx = range(i, min(i + 3, len(hours)))
+
+    def avg(key, fn=lambda v: sum(v) / len(v)):
+        vals = [data['hourly'][key][j] for j in idx if data['hourly'][key][j] is not None]
+        return fn(vals) if vals else None
+    wind, gust = avg('wind_speed_10m'), avg('wind_gusts_10m', max)
+    temp, rain = avg('temperature_2m'), avg('precipitation_probability', max)
+    return {'wind_mph': round(wind) if wind is not None else None,
+            'gust_mph': round(gust) if gust is not None else None,
+            'temp_f': round(temp) if temp is not None else None,
+            'precip_pct': round(rain) if rain is not None else None}
+
+
+@app.get('/api/weather-week')
+def weather_week(request: Request):
+    """Kickoff-time forecast for every upcoming outdoor or retractable-roof game in the next 16 days."""
+    rate_limit(request, 'weather', 20)
+    cached = cache.get('weather')
+    if cached and time.time() < cached[0]:
+        return cached[1]
+    now = datetime.now(timezone.utc)
+    games, errors = [], 0
+    for g in matchups()['games']:
+        if g['status'] != 'upcoming' or not g.get('kickoff') or g['home'] not in STADIUMS:
+            continue
+        lat, lon, roof = STADIUMS[g['home']]
+        kickoff = datetime.fromisoformat(g['kickoff'])
+        row = {'home': g['home'], 'away': g['away'], 'roof': roof, 'kickoff': g['kickoff'], 'forecast': None}
+        if roof != 'dome' and now <= kickoff <= now + timedelta(days=15):
+            try:
+                row['forecast'] = forecast_at(fetch_forecast(lat, lon), kickoff.astimezone(timezone.utc))
+            except Exception:
+                errors += 1
+        games.append(row)
+    result = {'games': games, 'errors': errors, 'as_of': now.isoformat(),
+              'note': 'Forecast for kickoff from Open-Meteo. It can change, so check again on game day.'}
+    cache['weather'] = (time.time() + (60 if errors else WEATHER_CACHE_MINUTES * 60), result)
+    return result
+
+
 TOP_LINES_CACHE_MINUTES = int(os.getenv('TOP_LINES_CACHE_MINUTES', '60'))
 RATING_RANK = {'PLAY': 0, 'LEAN': 1, 'PASS': 2}
 
