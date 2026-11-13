@@ -4724,6 +4724,41 @@ const STADIUM_ROOF = {
     ATL: "retractable", DAL: "retractable", HOU: "retractable", IND: "retractable", ARI: "retractable"
 };
 
+let weatherData = {};
+async function loadWeather() {
+    try {
+        const r = await fetch("/api/weather-week");
+        if (!r.ok) return;
+        const data = await r.json();
+        weatherData = {};
+        (data.games || []).forEach(g => { weatherData[g.home + "|" + g.away] = g; });
+        addWeatherFlags(document.getElementById("weeklyCards"));
+        addWeatherFlags(document.getElementById("tpLinesOut"));
+    } catch (error) { /* the generic reminder is still shown */ }
+}
+
+function forecastText(w, home) {
+    const f = w.forecast;
+    const parts = [];
+    if (f.wind_mph != null) parts.push("wind " + f.wind_mph + " mph" + (f.gust_mph != null ? " (gusts " + f.gust_mph + ")" : ""));
+    if (f.precip_pct != null) parts.push(f.precip_pct + "% chance of precipitation");
+    if (f.temp_f != null) parts.push(f.temp_f + "\u00B0F");
+    const windy = (f.wind_mph != null && f.wind_mph >= 15) || (f.gust_mph != null && f.gust_mph >= 25);
+    const wet = f.precip_pct != null && f.precip_pct >= 50;
+    const cold = f.temp_f != null && f.temp_f <= 32 && f.precip_pct != null && f.precip_pct >= 30;
+    const notes = [];
+    if (windy) notes.push("Windy: passing props and totals may run low.");
+    if (wet) notes.push("Wet: ball security and passing may suffer.");
+    if (cold) notes.push("Freezing with precipitation: possible snow or ice.");
+    return {
+        level: windy || wet || cold ? "check" : "info",
+        text: "Kickoff forecast (" + home + "): " + parts.join(", ") + ". " +
+            (notes.length ? notes.join(" ") : "No major weather concern.") +
+            (w.roof === "retractable" ? " Retractable roof: check if it will be open." : "") +
+            " Forecasts change, so check again on game day."
+    };
+}
+
 function weatherFlagFor(teamA, teamB) {
     const games = (typeof gameList !== "undefined" && Array.isArray(gameList)) ? gameList : [];
     const game = games.find(g => g.status === "upcoming" &&
@@ -4731,6 +4766,8 @@ function weatherFlagFor(teamA, teamB) {
     if (!game) return null;
     const roof = STADIUM_ROOF[game.home] || "outdoor";
     if (roof === "dome") return { level: "dome", text: "Roof: indoor stadium (" + game.home + "), weather should not matter." };
+    const w = weatherData[game.home + "|" + game.away];
+    if (w && w.forecast) return forecastText(w, game.home);
     if (roof === "retractable") return { level: "check", text: "Roof: retractable (" + game.home + "). Check if it will be open, then the weather." };
     return { level: "check", text: "Weather: outdoor stadium (" + game.home + "). Check wind, rain or snow before betting, especially passing props and totals. Wind of about 15 mph or more matters most." };
 }
@@ -4755,6 +4792,9 @@ function addWeatherFlags(root) {
         if (flag) h.after(weatherNode(flag));
     });
 }
+
+loadWeather();
+setInterval(loadWeather, 30 * 60 * 1000);
 
 (function () {
     ["weeklyCards", "tpLinesOut"].forEach(id => {
