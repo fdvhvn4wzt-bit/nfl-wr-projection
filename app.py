@@ -645,7 +645,8 @@ def project(offense_team: str, qb: str, receiver: str, defense: str, sportsbook:
 @app.get('/api/project/rushing')
 def rushing(offense_team: str, running_back: str, defense: str, sportsbook: str = 'Other',
             yards_line: float | None = None, attempts_line: float | None = None,
-            receiving_yards_line: float | None = None, receptions_line: float | None = None):
+            receiving_yards_line: float | None = None, receptions_line: float | None = None,
+            rush_rec_line: float | None = None):
     offense_team, defense = validate(offense_team, defense)
     d = stats()
     w = column(d, ['week'])
@@ -752,6 +753,12 @@ def rushing(offense_team: str, running_back: str, defense: str, sportsbook: str 
                                'receptions': confidence(rb_receptions, defense_rec['games'])}
     ye = improved - yards_line if yards_line is not None else None
     ae = attempts - attempts_line if attempts_line is not None else None
+    # Rush + Rec: add the two projections. Game-by-game totals drive the trend and confidence, so the way
+    # a back's rushing and receiving move together is already in the numbers.
+    rush_rec_projection = improved + projected_rb_receiving_yards
+    rush_rec_weekly = weekly_rush_rec(r)
+    rush_rec_trend = trend(rush_rec_weekly) if rush_rec_weekly else None
+    rre = rush_rec_projection - rush_rec_line if rush_rec_line is not None else None
     return {'offense_team': offense_team, 'running_back': running_back, 'defense': defense,
             'opponent_name': NFL_TEAMS[defense], 'season': season(),
             'projected_attempts': round(attempts, 2), 'projected_rushing_yards': round(improved, 2),
@@ -770,6 +777,11 @@ def rushing(offense_team: str, running_back: str, defense: str, sportsbook: str 
             'recent_form': {'rushing_yards': yards_trend, 'rushing_attempts': attempts_trend},
             'confidence': {'rushing_yards': confidence(rw.y.tolist(), dg),
                            'rushing_attempts': confidence(rw.c.tolist(), dg)},
+            'rb_rush_rec_projection': round(rush_rec_projection, 2),
+            'rb_rush_rec_average': round(avg(rush_rec_weekly), 2) if rush_rec_weekly else None,
+            'rush_rec_line': rush_rec_line, 'rush_rec_edge': round(rre, 2) if rre is not None else None,
+            'rush_rec_lean': lean(rre), 'rush_rec_confidence': confidence(rush_rec_weekly, dg),
+            'rush_rec_recent_form': rush_rec_trend,
             'rb_projected_targets': round(projected_targets, 2),
             'rb_receiving_yards_projection': round(projected_rb_receiving_yards, 2),
             'rb_receptions_projection': round(projected_rb_receptions, 2),
@@ -1026,7 +1038,20 @@ PROP_MODEL = {   # hint, prior coefficient of variation
     'rushing_yards': ('yards', .75), 'rushing_attempts': ('count', .38),
     'passing_yards': ('yards', .27), 'passing_attempts': ('count', .18),
     'passing_completions': ('count', .23), 'passing_touchdowns': ('rate', .8), 'interceptions': ('rate', 1.2)}
+PROP_MODEL['rush_rec_yards'] = ('yards', .65)   # RB rushing + receiving yards combined (line entered by hand)
+RUSH_REC_LEAN_CAP = True   # new prop: never grade above LEAN until results have been checked
 MARKET_WEIGHT = .30     # how much the posted line is blended into the projection
+
+
+def weekly_rush_rec(p):
+    """One total per game: rushing yards + receiving yards. Using real game totals means the way the two
+    move together is already in the spread, so it does not have to be modeled separately."""
+    rc = column(p, ['rushing_yards', 'rush_yards'])
+    vc = column(p, ['receiving_yards', 'rec_yards'])
+    if p.empty or not rc or not vc or '_week' not in p:
+        return []
+    q = p.assign(_v=numeric(p, rc).fillna(0) + numeric(p, vc).fillna(0))
+    return q.groupby('_week')['_v'].sum().sort_index().tolist()
 
 
 def _ncdf(x):
@@ -1108,7 +1133,11 @@ def analyze_line(request: Request, team: str, player_name: str, prop: str, line:
     under_price = check_price(under_price, 'under_price')
     hint, cv = PROP_MODEL[prop]
     p = player(stats(), player_name, team)
-    stat_col = column(p, {'receiving_yards': ['receiving_yards', 'rec_yards'], 'receptions': ['receptions'],
+    if prop == 'rush_rec_yards':
+        stat_col = None
+        values = weekly_rush_rec(p)
+    else:
+      stat_col = column(p, {'receiving_yards': ['receiving_yards', 'rec_yards'], 'receptions': ['receptions'],
                           'rushing_yards': ['rushing_yards', 'rush_yards'],
                           'rushing_attempts': ['carries', 'rushing_attempts', 'rush_attempts'],
                           'passing_yards': ['passing_yards', 'pass_yards'],
@@ -1116,9 +1145,10 @@ def analyze_line(request: Request, team: str, player_name: str, prop: str, line:
                           'passing_completions': ['completions', 'passing_completions'],
                           'passing_touchdowns': ['passing_tds', 'passing_touchdowns'],
                           'interceptions': ['interceptions', 'passing_interceptions']}[prop])
-    values = []
-    if stat_col is not None and not p.empty:
-        values = p.assign(_v=numeric(p, stat_col)).groupby('_week')['_v'].sum().sort_index().tolist()
+    if prop != 'rush_rec_yards':
+        values = []
+        if stat_col is not None and not p.empty:
+            values = p.assign(_v=numeric(p, stat_col)).groupby('_week')['_v'].sum().sort_index().tolist()
     sd = blended_sd(values, projection, cv)
     conf = confidence(values, defense_games)
     if hint == 'rate' and conf == 'HIGH':
@@ -1162,6 +1192,10 @@ def analyze_line(request: Request, team: str, player_name: str, prop: str, line:
         rating = 'LEAN'
     else:
         rating = 'PASS'
+    if prop == 'rush_rec_yards' and RUSH_REC_LEAN_CAP:
+        notes.append('Rush + Rec Yards is a new prop: it is capped at LEAN until its results have been checked.')
+        if rating == 'PLAY':
+            rating = 'LEAN'
     b = dec - 1
     kelly = (side_prob * b - (1 - side_prob - (pp if side == 'OVER' else pp))) / b if b > 0 else 0
     stake = clamp(.25 * kelly, 0, .015) if rating != 'PASS' else 0
@@ -1590,13 +1624,21 @@ def historical_hit_rates(team: str, player_name: str, prop: str, line: float):
     team = norm_team(team)
     if team not in NFL_TEAMS:
         raise HTTPException(400, 'Invalid team.')
-    if prop not in HISTORY_STAT_COLUMNS:
+    if prop not in HISTORY_STAT_COLUMNS and prop != 'rush_rec_yards':
         raise HTTPException(400, 'Unsupported prop.')
     if not math.isfinite(line) or line < 0:
         raise HTTPException(400, 'Invalid line.')
     p = player(stats(), player_name, team)
     if p.empty:
         raise HTTPException(404, 'No completed games for this player.')
+    if prop == 'rush_rec_yards':
+        values = [float(v) for v in weekly_rush_rec(p) if v >= 0]
+        if not values:
+            raise HTTPException(503, 'Historical stat field unavailable.')
+        return {'player': player_name, 'team': team, 'prop': prop, 'line': line,
+                'last_3': hit_rate_window(values[-3:], line), 'last_5': hit_rate_window(values[-5:], line),
+                'season': hit_rate_window(values, line),
+                'note': 'Rushing plus receiving yards per game. Pushes are excluded from the percentages.'}
     sc = column(p, HISTORY_STAT_COLUMNS[prop])
     if not sc:
         raise HTTPException(503, 'Historical stat field unavailable.')
