@@ -254,7 +254,9 @@ summary{cursor:pointer;margin:8px 0}
 <input type="number" min="0" step="0.5" id="rbReceivingYardsLine">
 <label>RB Receptions Line (optional)</label>
 <input type="number" min="0" step="0.5" id="rbReceptionsLine">
-<button id="rushCalculate" onclick="runRushingProjection()">GENERATE ALL FOUR RB PROJECTIONS</button>
+<label>RB Rush + Rec Yards Line (optional)</label>
+<input type="number" min="0" step="0.5" id="rushRecLine">
+<button id="rushCalculate" onclick="runRushingProjection()">GENERATE ALL RB PROJECTIONS</button>
 <div id="rushError" class="error"></div>
 </div>
 
@@ -272,7 +274,7 @@ summary{cursor:pointer;margin:8px 0}
 </div>
 
 <div class="card">
-<h2>🏈 All Four RB Props - Quick Comparison</h2>
+<h2>🏈 All RB Props - Quick Comparison</h2>
 <div class="grid" id="rbFourQuick"></div>
 <p class="small">DraftKings lines appear after tapping Fetch; manual lines are used when a DraftKings line is unavailable.</p>
 </div>
@@ -916,7 +918,8 @@ const props=[
 ["rushing_yards","Rushing Yards",data.projected_rushing_yards,"rushYardsLine","yards"],
 ["rushing_attempts","Rushing Attempts",data.projected_attempts,"rushAttemptsLine","attempts"],
 ["receiving_yards","RB Receiving Yards",data.rb_receiving_yards_projection,"rbReceivingYardsLine","yards"],
-["receptions","RB Receptions",data.rb_receptions_projection,"rbReceptionsLine","receptions"]
+["receptions","RB Receptions",data.rb_receptions_projection,"rbReceptionsLine","receptions"],
+["rush_rec_yards","RB Rush + Rec Yards",data.rb_rush_rec_projection,"rushRecLine","yards"]
 ];
 
 metrics("rbFourQuick",props.map(([key,label,projection,id,unit])=>{
@@ -952,7 +955,8 @@ const hasYards=addLine(params,"rushYardsLine","yards_line");
 const hasAttempts=addLine(params,"rushAttemptsLine","attempts_line");
 const hasReceivingYards=addLine(params,"rbReceivingYardsLine","receiving_yards_line");
 const hasReceptions=addLine(params,"rbReceptionsLine","receptions_line");
-const hasManualLine=hasYards||hasAttempts||hasReceivingYards||hasReceptions;
+const hasRushRec=addLine(params,"rushRecLine","rush_rec_line");
+const hasManualLine=hasYards||hasAttempts||hasReceivingYards||hasReceptions||hasRushRec;
 
 const data=await jsonFetch("/api/project/rushing?"+params.toString());
 
@@ -975,7 +979,8 @@ showConfidence("rushingConfidence",[
 ["Rushing Yards",data.confidence?.rushing_yards],
 ["Rushing Attempts",data.confidence?.rushing_attempts],
 ["RB Receiving Yards",data.rb_receiving_confidence?.receiving_yards],
-["RB Receptions",data.rb_receiving_confidence?.receptions]
+["RB Receptions",data.rb_receiving_confidence?.receptions],
+["RB Rush + Rec Yards",data.rush_rec_confidence]
 ]);
 
 metrics("rushMetrics",[
@@ -1040,6 +1045,10 @@ manualLine("rbReceivingYardsLine"),"yards"
 ["RB Receptions",comparison(
 data.rb_receptions_projection,
 manualLine("rbReceptionsLine"),"receptions"
+)],
+["RB Rush + Rec Yards",comparison(
+data.rb_rush_rec_projection,
+manualLine("rushRecLine"),"yards"
 )]
 ]);
 }
@@ -1324,7 +1333,7 @@ button.disabled=false;
 /* HISTORICAL MANUAL-LINE HIT RATES - no Odds API calls */
 const HIT_PROPS={
  receiving:[["receiving_yards","Receiving Yards","line"],["receptions","Receptions","receptionsLine"]],
- rushing:[["rushing_yards","Rushing Yards","rushYardsLine"],["rushing_attempts","Rushing Attempts","rushAttemptsLine"],["receiving_yards","RB Receiving Yards","rbReceivingYardsLine"],["receptions","RB Receptions","rbReceptionsLine"]],
+ rushing:[["rushing_yards","Rushing Yards","rushYardsLine"],["rushing_attempts","Rushing Attempts","rushAttemptsLine"],["receiving_yards","RB Receiving Yards","rbReceivingYardsLine"],["receptions","RB Receptions","rbReceptionsLine"],["rush_rec_yards","RB Rush + Rec Yards","rushRecLine"]],
  qb:QB_PROPS.map(([key,label])=>[key,label,"qbLine_"+key])
 };
 const hitRequestVersion={receiving:0,rushing:0,qb:0};
@@ -1755,6 +1764,15 @@ projection:data.rb_receptions_projection,
 choice:chooseLine(rbDraftKings.receptions,"rbReceptionsLine"),
 confidence:data.rb_receiving_confidence?.receptions,
 fetchedAt:rushingOddsFetchedAt
+},
+{
+key:"rush_rec_yards",
+label:"RB Rush + Rec Yards",
+unit:"yards",
+projection:data.rb_rush_rec_projection,
+choice:chooseLine(rbDraftKings.rush_rec_yards,"rushRecLine"),
+confidence:data.rush_rec_confidence,
+fetchedAt:rushingOddsFetchedAt
 }
 ];
 
@@ -2163,7 +2181,7 @@ resetProjections();
 for(const id of [
 "line","receptionsLine",
 "rushYardsLine","rushAttemptsLine",
-"rbReceivingYardsLine","rbReceptionsLine"
+"rbReceivingYardsLine","rbReceptionsLine","rushRecLine"
 ]){
 $(id).addEventListener("input",()=>{
 if(id==="line"||id==="receptionsLine"){
@@ -2470,7 +2488,8 @@ return {player:d.running_back,team:d.offense_team,dg:d.defense_games_sampled,dk:
 props:[["rushing_yards","Rushing Yards",d.projected_rushing_yards,"rushYardsLine"],
 ["rushing_attempts","Rushing Attempts",d.projected_attempts,"rushAttemptsLine"],
 ["receiving_yards","RB Receiving Yards",d.rb_receiving_yards_projection,"rbReceivingYardsLine"],
-["receptions","RB Receptions",d.rb_receptions_projection,"rbReceptionsLine"]]};
+["receptions","RB Receptions",d.rb_receptions_projection,"rbReceptionsLine"],
+["rush_rec_yards","RB Rush + Rec Yards",d.rb_rush_rec_projection,"rushRecLine"]]};
 }
 const d=qbProjection;if(!d)return null;
 return {player:d.quarterback,team:d.offense_team,dg:d.defense_games_sampled,dk:qbDraftKings,
@@ -2688,7 +2707,7 @@ if(card)card.remove();
 
 for(const [kind,ids] of Object.entries({
 receiving:["line","receptionsLine"],
-rushing:["rushYardsLine","rushAttemptsLine","rbReceivingYardsLine","rbReceptionsLine"],
+rushing:["rushYardsLine","rushAttemptsLine","rbReceivingYardsLine","rbReceptionsLine","rushRecLine"],
 qb:QB_PROPS.map(([key])=>"qbLine_"+key)
 })){
 for(const id of ids){
@@ -3514,7 +3533,8 @@ const SHEET_PROPS = {
     passing_attempts: "Passing Attempts",
     passing_completions: "Passing Completions",
     passing_touchdowns: "Passing TDs",
-    interceptions: "Interceptions"
+    interceptions: "Interceptions",
+    rush_rec_yards: "Rush + Rec Yards"
 };
 const MAX_SHEET_LEGS = 6;
 
